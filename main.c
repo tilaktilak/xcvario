@@ -3,6 +3,7 @@
 #include "softuart.h"
 #include <avr/io.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #ifndef F_CPU
 #define F_CPU 800000000UL
@@ -52,12 +53,17 @@ int main(void)
 
     uart_init();
 	softuart_init();
-	softuart_turn_rx_on(); /* redundant - on by default */
+	softuart_turn_rx_on(); /* redundant - on by default */  
+    i2c_init();
 	
 	sei();
 
 	
     stdout = &uart_output;
+
+   printf("BMP : 0x%x\n",InitBMP280());
+    while(1);
+
 	for (;;) {
 	
 		if ( softuart_kbhit() ) {
