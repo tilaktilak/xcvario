@@ -8,13 +8,16 @@
 #define REG_CTRL_MEAS       0xF4
 #define REG_CONFIG          0xF5
 
+#define REG_CALIB_firstLSB  0x88
+
+#define REG_TEMP_MSB        0xFA
+#define REG_PRES_MSB        0xF7
+
 #include "i2c_master.h"
 #include <avr/io.h>
 
 int InitBMP280(){
-    int retval = 0;
     uint8_t data;
-    uint8_t reset_value = 0xB6;
 
     i2c_readReg(BMP_ADDR,REG_ID,&data,1);
     if(data != 0x58) return 1;
@@ -25,13 +28,74 @@ int InitBMP280(){
     uint8_t ctrl_meas = 0b01010111;
     i2c_writeReg(BMP_ADDR,REG_CTRL_MEAS,&ctrl_meas,1);
 
-
     // tstdy =  0.5     /000
     // IRR = 16         /100
     // SPI ENABLE       /0
     uint8_t config = 0b0001000;
     i2c_writeReg(BMP_ADDR,REG_CONFIG,&config,1);
 
+    uint8_t address = REG_CALIB_firstLSB;
+
+    // Get Calibration Data
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T1,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T1+1,1);
+
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&git_T2,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&git_T2+1,1);
+    
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T3,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T3+1,1);
+
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P1,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P1+1,1);
+
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P2,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P2+1,1);
+
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P3,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P3+1,1);
+
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P4,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P4+1,1);
+
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P5,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P5+1,1);
+
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P6,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P6+1,1);
+
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P7,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P7+1,1);
+
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P8,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P8+1,1);
+
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P9,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P9+1,1);
+}
+
+int32_t ReadT_BMP280(void){
+    int32_t temp;
+    i2c_readReg(BMP_ADDR,REG_TEMP_MSB,  (uint8_t*)&temp+2,1);
+    i2c_readReg(BMP_ADDR,REG_TEMP_MSB+1,(uint8_t*)&temp+1,1);
+    i2c_readReg(BMP_ADDR,REG_TEMP_MSB+2,(uint8_t*)&temp  ,1);
+    //temp = temp >> 4;
+    return temp;
+}
+
+int32_t ReadP_BMP280(void){
+    uint32_t pres;
+    uint8_t buf[3];
+    i2c_readReg(BMP_ADDR,REG_PRES_MSB,buf,3);
+    pres = buf[2];
+    //i2c_readReg(BMP_ADDR,REG_PRES_MSB+1,(uint8_t*)&pres+1,1);
+    //i2c_readReg(BMP_ADDR,REG_PRES_MSB+2,(uint8_t*)&pres  ,1);
+    //pres = pres >> 4;
+    //printf(" BUF : 0x%02x %02x %02x\n",buf[0],buf[1],buf[2]);
+    pres = buf[0]<<16 ;//+ buf[1]<<8 + buf[2];// + buf[1]<<1 + buf[2];
+    printf(" PRES : %08x - %d\n",pres,pres);
+
+    return pres;
 }
 
 #if 0
@@ -199,26 +263,41 @@ int32_t bmp280_compensate_T_int32(int32_t adc_T)
     T = (t_fine * 5 + 128) >> 8;
     return T;
 }
-// Returns pressure in Pa as unsigned 32 bit integer in Q24.8 format (24 integer bits and 8 fractional bits).
-// Output value of "24674867" represents 24674867/256 = 96386.2 Pa = 963.862 hPa
-uint32_t bmp280_compensate_P_int64(int32_t adc_P)
+
+// Returns pressure in Pa as unsigned 32 bit integer. Output value of “96386” equals 96386 Pa = 963.86 hPa
+uint32_t bmp280_compensate_P_int32(int32_t adc_P)
 {
-    int64_t var1, var2, p;
-    var1 = ((int64_t)t_fine) - 128000;
-    var2 = var1 * var1 * (int64_t)dig_P6;
-    var2 = var2 + ((var1*(int64_t)dig_P5)<<17);
-    var2 = var2 + (((int64_t)dig_P4)<<35);
-    var1 = ((var1 * var1 * (int64_t)dig_P3)>>8) + ((var1 * (int64_t)dig_P2)<<12);
-    var1 = (((((int64_t)1)<<47)+var1))*((int64_t)dig_P1)>>33;
+    int32_t var1, var2;
+    uint32_t p;
+    var1 = (((int32_t)t_fine)>>1) - (int32_t)64000;
+    var2 = (((var1>>2) * (var1>>2)) >> 11 ) * ((int32_t)dig_P6);
+    var2 = var2 + ((var1*((int32_t)dig_P5))<<1);
+    var2 = (var2>>2)+(((int32_t)dig_P4)<<16);
+    var1 = (((dig_P3 * (((var1>>2) * (var1>>2)) >> 13 )) >> 3) + ((((int32_t)dig_P2) * var1)>>1))>>18;
+    var1 =((((32768+var1))*((int32_t)dig_P1))>>15);
     if (var1 == 0)
     {
         return 0; // avoid exception caused by division by zero
     }
-    p = 1048576-adc_P;
-    p = (((p<<31)-var2)*3125)/var1;
-    var1 = (((int64_t)dig_P9) * (p>>13) * (p>>13)) >> 25;
-    var2 = (((int64_t)dig_P8) * p) >> 19;
-    p = ((p + var1 + var2) >> 8) + (((int64_t)dig_P7)<<4);
-    return (uint32_t)p;
+    p = (((uint32_t)(((int32_t)1048576)-adc_P)-(var2>>12)))*3125;
+    if (p < 0x80000000)
+    {
+        p = (p << 1) / ((uint32_t)var1);
+    }
+    else
+    {
+        p = (p / (uint32_t)var1) * 2;
+    }
+    var1 = (((int32_t)dig_P9) * ((int32_t)(((p>>3) * (p>>3))>>13)))>>12;
+    var2 = (((int32_t)(p>>2)) * ((int32_t)dig_P8))>>13;
+    p = (uint32_t)((int32_t)p + ((var1 + var2 + dig_P7) >> 4));
+    return p;
 }
 
+int32_t comp_pres_BMP280(void){
+    ReadT_BMP280(); // Update t_fine variable
+    int32_t pres = ReadP_BMP280();
+//    printf("pres Ox%x pres\n",pres);
+    pres =  bmp280_compensate_P_int32(pres);
+    return pres;
+}

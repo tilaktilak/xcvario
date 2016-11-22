@@ -62,7 +62,11 @@ int main(void)
     stdout = &uart_output;
 
    printf("BMP : 0x%x\n",InitBMP280());
-    while(1);
+int pres;
+    while(1){
+        pres= comp_pres_BMP280();
+        //printf("pres %d\n",pres);
+    }
 
 	for (;;) {
 	
