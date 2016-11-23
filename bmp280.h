@@ -2,7 +2,9 @@
 
 #define BMP280_ADDY 0xEC
 
-int InitBMP280();
+int InitBMP280(void);
+
+int32_t comp_pres_BMP280(void);
 
 //uint8_t BMPGetStatus();
 
