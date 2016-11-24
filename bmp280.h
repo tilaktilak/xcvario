@@ -5,6 +5,7 @@
 int InitBMP280(void);
 
 int32_t comp_pres_BMP280(void);
+float alt_BMP280(void);
 
 //uint8_t BMPGetStatus();
 
@@ -14,7 +15,7 @@ int32_t comp_pres_BMP280(void);
 //Returns 6 values.  MSB first for Pressure (3 bytes) then Temp (3 bytes)
 //int GetBMPTelem( uint8_t * vals );
 unsigned short dig_T1; 
-short git_T2;
+short dig_T2;
 short dig_T3;
 short dig_P6;
 short dig_P5;

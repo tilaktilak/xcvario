@@ -63,8 +63,11 @@ int main(void)
 
    printf("BMP : 0x%x\n",InitBMP280());
 int pres;
+float alt;
     while(1){
-        pres= comp_pres_BMP280();
+        //pres= comp_pres_BMP280();
+        alt = alt_BMP280();
+        
         //printf("pres %d\n",pres);
     }
 

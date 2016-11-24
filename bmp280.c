@@ -1,5 +1,6 @@
 // This is intended to be included in the main .c, after static_i2c.h
 #include <stdint.h>
+#include <math.h>
 #include "bmp280.h"
 #define BMP_ADDR (0x76<<1)
 
@@ -26,12 +27,14 @@ int InitBMP280(){
     // OSRS_P = x16     / 101
     // Mode NORMAL      / 11
     uint8_t ctrl_meas = 0b01010111;
+    //uint8_t ctrl_meas = 0x3F;
     i2c_writeReg(BMP_ADDR,REG_CTRL_MEAS,&ctrl_meas,1);
 
     // tstdy =  0.5     /000
-    // IRR = 16         /100
+    /////////////////////////// IRR = 16         /100
+    // IRR = 4         /010
     // SPI ENABLE       /0
-    uint8_t config = 0b0001000;
+    uint8_t config = 0b0000100;
     i2c_writeReg(BMP_ADDR,REG_CONFIG,&config,1);
 
     uint8_t address = REG_CALIB_firstLSB;
@@ -40,8 +43,8 @@ int InitBMP280(){
     i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T1,1);
     i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T1+1,1);
 
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&git_T2,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&git_T2+1,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T2,1);
+    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T2+1,1);
     
     i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T3,1);
     i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T3+1,1);
@@ -76,176 +79,33 @@ int InitBMP280(){
 
 int32_t ReadT_BMP280(void){
     int32_t temp;
-    i2c_readReg(BMP_ADDR,REG_TEMP_MSB,  (uint8_t*)&temp+2,1);
-    i2c_readReg(BMP_ADDR,REG_TEMP_MSB+1,(uint8_t*)&temp+1,1);
-    i2c_readReg(BMP_ADDR,REG_TEMP_MSB+2,(uint8_t*)&temp  ,1);
-    //temp = temp >> 4;
+    uint8_t buf[3];
+    i2c_readReg(BMP_ADDR,REG_TEMP_MSB,  (uint8_t*)&buf,3);
+    temp = buf[0];
+    temp = temp << 8;
+    temp += buf[1];
+    temp = temp<<4;
+    temp += buf[2]>>4;
+    //printf("TEMP %ld\n",temp);
+
     return temp;
 }
 
 int32_t ReadP_BMP280(void){
-    uint32_t pres;
+    int32_t pres;
     uint8_t buf[3];
     i2c_readReg(BMP_ADDR,REG_PRES_MSB,buf,3);
-    pres = buf[2];
-    //i2c_readReg(BMP_ADDR,REG_PRES_MSB+1,(uint8_t*)&pres+1,1);
-    //i2c_readReg(BMP_ADDR,REG_PRES_MSB+2,(uint8_t*)&pres  ,1);
-    //pres = pres >> 4;
-    //printf(" BUF : 0x%02x %02x %02x\n",buf[0],buf[1],buf[2]);
-    pres = buf[0]<<16 ;//+ buf[1]<<8 + buf[2];// + buf[1]<<1 + buf[2];
-    printf(" PRES : %08x - %d\n",pres,pres);
+
+    pres = buf[0];
+    pres = pres << 8;
+    pres += buf[1];
+    pres = pres<<4;
+    pres += buf[2]>>4;
+
 
     return pres;
 }
 
-#if 0
-int InitBMP280()
-{
-    int r;
-
-    SendStart();
-    r = SendByte( 0 );
-    if( !r ) { SendStop(); SendString(PSTR("I2C Fault")); return -2; }
-    SendStop();
-
-    SendStart();
-    r = SendByte( BMP280_ADDY );
-    if( r ) { SendStop(); SendString(PSTR("BMP Fault")); return -3; }
-    SendByte( 0xE0 );
-    SendByte( 0xB6 ); //Reboot
-    SendStop();
-
-    SendStart();
-    r = SendByte( BMP280_ADDY );
-    if( r ) { SendStop(); SendString(PSTR("BMP ID Fault")); return -4; }
-    SendByte( 0xD0 );
-    SendStop();
-
-    SendStart();
-    r = SendByte( BMP280_ADDY | 1 );
-    if( r ) { SendStop(); SendString(PSTR("BMP Fault")); return -5; }
-    if( (r=GetByte(1)) != 0x58 ) { SendStop(); PromptVal(PSTR("BMPID"),r); return -6; }
-    SendStop();
-
-
-    //Datasheet recommends setting up for: 
-    // osrs_p = x16      osrs_p = 101
-    // osrs_t = x2       osrs_t = 010
-    // filter iir = 16              (though I question this)
-    // ODR = 26.3        
-    // Mode = Normal     mode = 11
-    // Standby = 0       t_sb = 000
-    
-
-    SendStart();
-    r = SendByte( BMP280_ADDY );
-    if( r ) { SendStop(); SendString(PSTR("BMP ID Fault")); return -4; }
-    SendByte( 0xF4 );
-    SendByte( 0b01010111 ); //osrs_t osrs_p mode
-
-
-    //XXX Filter may be incorrect
-    //t_sb filter spi3w_en
-    SendByte( 0b00010100 );
-
-    SendStop();
-
-
-    return 0;
-}
-
-uint8_t BMPGetStatus()
-{
-    uint8_t ret = 0;
-    SendStart();
-    if( SendByte( BMP280_ADDY ) ) { SendStop(); SendString(PSTR("BMP STAT")); return 0xff; }
-    SendByte( 0xF3 );
-    SendStop();
-
-    SendStart();
-    if( SendByte( BMP280_ADDY | 1 ) ) { SendStop(); SendString(PSTR("BMP STAT")); return 0xff; }
-    ret = GetByte(1);
-    SendStop();
-    return ret;
-}
-
-
-//Which = 0 or 12.  Returns 12 values.
-int GetBMPCalVals( int offset, uint8_t * vals )
-{
-    int i, r;
-    i = 0;
-    for( i = 0; i < 100; i++ )
-    {
-        if( !(BMPGetStatus() & 1 )) break;
-        _delay_us(10);
-    }
-    if( i == 10 )
-    {
-        SendString(PSTR("BMP TO")); return -1;
-    }
-/*
-retry:
-    SendStart();
-    if( SendByte( BMP280_ADDY ) ) { SendStop();  }
-    SendByte( 0xF3 );
-    SendStop();
-
-    SendStart();
-    r = SendByte( BMP280_ADDY | 1 );
-    if( r ) { SendStop(); SendString(PSTR("BMP ST Fault")); return -5; }
-    if( GetByte(1) & 1 ) {
-        i++;
-        SendStop();
-        if( i > 100 )
-        {
-            SendString(PSTR("BMP ST TO"));
-            return -9;
-        }
-        goto retry;
-    }
-    SendStop();
-
-*/
-    SendStart();
-    r = SendByte( BMP280_ADDY );
-    if( r ) { SendStop(); SendString(PSTR("BMP CC Fault")); return -4; }
-    SendByte( 0x88 + offset );
-    SendStop();
-
-    SendStart();
-    r = SendByte( BMP280_ADDY | 1 );
-    if( r ) { SendStop(); SendString(PSTR("BMP CC Fault")); return -5; }
-    for( i = 0; i < 11; i++ )
-        vals[i] = GetByte(0);
-    vals[11] = GetByte(1);
-    SendStop();
-
-    return 0;
-}
-
-//Returns 6 values.  MSB first for Pressure (3 bytes) then Temp (3 bytes)
-int GetBMPTelem( uint8_t * vals )
-{
-    uint8_t i;
-
-    SendStart();
-    if( SendByte( BMP280_ADDY ) ) { SendStop(); SendString(PSTR("BMP BB Fault")); return -4; }
-    SendByte( 0xF7 );
-    SendStop();
-
-    SendStart();
-    if( SendByte( BMP280_ADDY | 1 ) ) { SendStop(); SendString(PSTR("BMP BB Fault")); return -5; }
-    for( i = 0; i < 5; i++ )
-        vals[i] = GetByte(0);
-    vals[5] = GetByte(1);
-    SendStop();
-
-    return 0;
-}
-
-
-#endif
 
 // CODE FROM DATASHEET
 
@@ -253,10 +113,10 @@ int GetBMPTelem( uint8_t * vals )
 // Returns temperature in DegC, resolution is 0.01 DegC. Output value of "5123" equals 51.23 DegC.
 // t_fine carries fine temperature as global value
 int32_t t_fine;
-int32_t bmp280_compensate_T_int32(int32_t adc_T)
+/*int32_t bmp280_compensate_T_int32(int32_t adc_T)
 {
     int32_t var1, var2, T;
-    var1 = ((((adc_T>>3) - ((int32_t)dig_T1<<1))) * ((int32_t)git_T2)) >> 11;
+    var1 = ((((adc_T>>3) - ((int32_t)dig_T1<<1))) * ((int32_t)dig_T2)) >> 11;
     var2 = (((((adc_T>>4) - ((int32_t)dig_T1)) * ((adc_T>>4) - ((int32_t)dig_T1))) >> 12) *
             ((int32_t)dig_T3)) >> 14;
     t_fine = var1 + var2;
@@ -293,11 +153,81 @@ uint32_t bmp280_compensate_P_int32(int32_t adc_P)
     p = (uint32_t)((int32_t)p + ((var1 + var2 + dig_P7) >> 4));
     return p;
 }
+*/
+float readTemperature(void){
+  int32_t var1, var2;
 
+  int32_t adc_T = ReadT_BMP280();
+  //adc_T >>= 4;
+
+  var1  = ((((adc_T>>3) - ((int32_t)dig_T1 <<1))) *
+	   ((int32_t)dig_T2)) >> 11;
+
+  var2  = (((((adc_T>>4) - ((int32_t)dig_T1)) *
+	     ((adc_T>>4) - ((int32_t)dig_T1))) >> 12) *
+	   ((int32_t)dig_T3)) >> 14;
+
+  t_fine = var1 + var2;
+
+  float T  = (t_fine * 5 + 128) >> 8;
+  return T/100;
+}
+
+float readPressure(void) {
+  int64_t var1, var2, p;
+
+  // Must be done first to get the t_fine variable set up
+  readTemperature();
+
+  int32_t adc_P = ReadP_BMP280();
+  //adc_P >>= 4;
+
+  var1 = ((int64_t)t_fine) - 128000;
+  var2 = var1 * var1 * (int64_t)dig_P6;
+  var2 = var2 + ((var1*(int64_t)dig_P5)<<17);
+  var2 = var2 + (((int64_t)dig_P4)<<35);
+  var1 = ((var1 * var1 * (int64_t)dig_P3)>>8) +
+    ((var1 * (int64_t)dig_P2)<<12);
+  var1 = (((((int64_t)1)<<47)+var1))*((int64_t)dig_P1)>>33;
+
+  if (var1 == 0) {
+    return 0;  // avoid exception caused by division by zero
+  }
+  p = 1048576 - adc_P;
+  p = (((p<<31) - var2)*3125) / var1;
+  var1 = (((int64_t)dig_P9) * (p>>13) * (p>>13)) >> 25;
+  var2 = (((int64_t)dig_P8) * p) >> 19;
+
+  p = ((p + var1 + var2) >> 8) + (((int64_t)dig_P7)<<4);
+  return (float)p/256;
+}
+
+float readAltitude(float seaLevelhPa) {
+  float altitude;
+
+  float pressure = readPressure(); // in Si units for Pascal
+  pressure /= 100;
+
+  altitude = 44330 * (1.0 - pow(pressure / seaLevelhPa, 0.1903));
+
+  return altitude;
+}
 int32_t comp_pres_BMP280(void){
     ReadT_BMP280(); // Update t_fine variable
     int32_t pres = ReadP_BMP280();
-//    printf("pres Ox%x pres\n",pres);
-    pres =  bmp280_compensate_P_int32(pres);
+    //pres =  bmp280_compensate_P_int32(pres);
+    //printf(" %lx %li\n",pres,pres);//-%02x %02x %02x\n",pres,buf[0],buf[1],buf[2]);
     return pres;
 }
+
+float alt_BMP280(void){
+    int32_t pres = readPressure();
+    float alt = (1.f - powf(((float)pres)/101325.,0.190284))*145366.45;
+    alt = alt * 0.3048;
+
+    printf(" %ld \n",(int32_t)(alt*100.));
+}
+
+// CONF ADAFRUIT : temp oversample x1
+// pres oversample x16
+// MODE normal
