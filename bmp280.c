@@ -27,11 +27,9 @@ int InitBMP280(){
     // OSRS_P = x16     / 101
     // Mode NORMAL      / 11
     uint8_t ctrl_meas = 0b01010111;
-    //uint8_t ctrl_meas = 0x3F;
     i2c_writeReg(BMP_ADDR,REG_CTRL_MEAS,&ctrl_meas,1);
 
     // tstdy =  0.5     /000
-    /////////////////////////// IRR = 16         /100
     // IRR = 4         /010
     // SPI ENABLE       /0
     uint8_t config = 0b0000100;
@@ -86,8 +84,6 @@ int32_t ReadT_BMP280(void){
     temp += buf[1];
     temp = temp<<4;
     temp += buf[2]>>4;
-    //printf("TEMP %ld\n",temp);
-
     return temp;
 }
 
@@ -95,70 +91,20 @@ int32_t ReadP_BMP280(void){
     int32_t pres;
     uint8_t buf[3];
     i2c_readReg(BMP_ADDR,REG_PRES_MSB,buf,3);
-
     pres = buf[0];
     pres = pres << 8;
     pres += buf[1];
     pres = pres<<4;
     pres += buf[2]>>4;
-
-
     return pres;
 }
 
 
-// CODE FROM DATASHEET
 
- 
-// Returns temperature in DegC, resolution is 0.01 DegC. Output value of "5123" equals 51.23 DegC.
-// t_fine carries fine temperature as global value
-int32_t t_fine;
-/*int32_t bmp280_compensate_T_int32(int32_t adc_T)
-{
-    int32_t var1, var2, T;
-    var1 = ((((adc_T>>3) - ((int32_t)dig_T1<<1))) * ((int32_t)dig_T2)) >> 11;
-    var2 = (((((adc_T>>4) - ((int32_t)dig_T1)) * ((adc_T>>4) - ((int32_t)dig_T1))) >> 12) *
-            ((int32_t)dig_T3)) >> 14;
-    t_fine = var1 + var2;
-    T = (t_fine * 5 + 128) >> 8;
-    return T;
-}
-
-// Returns pressure in Pa as unsigned 32 bit integer. Output value of “96386” equals 96386 Pa = 963.86 hPa
-uint32_t bmp280_compensate_P_int32(int32_t adc_P)
-{
-    int32_t var1, var2;
-    uint32_t p;
-    var1 = (((int32_t)t_fine)>>1) - (int32_t)64000;
-    var2 = (((var1>>2) * (var1>>2)) >> 11 ) * ((int32_t)dig_P6);
-    var2 = var2 + ((var1*((int32_t)dig_P5))<<1);
-    var2 = (var2>>2)+(((int32_t)dig_P4)<<16);
-    var1 = (((dig_P3 * (((var1>>2) * (var1>>2)) >> 13 )) >> 3) + ((((int32_t)dig_P2) * var1)>>1))>>18;
-    var1 =((((32768+var1))*((int32_t)dig_P1))>>15);
-    if (var1 == 0)
-    {
-        return 0; // avoid exception caused by division by zero
-    }
-    p = (((uint32_t)(((int32_t)1048576)-adc_P)-(var2>>12)))*3125;
-    if (p < 0x80000000)
-    {
-        p = (p << 1) / ((uint32_t)var1);
-    }
-    else
-    {
-        p = (p / (uint32_t)var1) * 2;
-    }
-    var1 = (((int32_t)dig_P9) * ((int32_t)(((p>>3) * (p>>3))>>13)))>>12;
-    var2 = (((int32_t)(p>>2)) * ((int32_t)dig_P8))>>13;
-    p = (uint32_t)((int32_t)p + ((var1 + var2 + dig_P7) >> 4));
-    return p;
-}
-*/
-float readTemperature(void){
+float TemperatureBMP280(void){
   int32_t var1, var2;
 
   int32_t adc_T = ReadT_BMP280();
-  //adc_T >>= 4;
 
   var1  = ((((adc_T>>3) - ((int32_t)dig_T1 <<1))) *
 	   ((int32_t)dig_T2)) >> 11;
@@ -173,14 +119,13 @@ float readTemperature(void){
   return T/100;
 }
 
-float readPressure(void) {
+float PressureBMP280(void) {
   int64_t var1, var2, p;
 
   // Must be done first to get the t_fine variable set up
-  readTemperature();
+  TemperatureBMP280();
 
   int32_t adc_P = ReadP_BMP280();
-  //adc_P >>= 4;
 
   var1 = ((int64_t)t_fine) - 128000;
   var2 = var1 * var1 * (int64_t)dig_P6;
@@ -202,32 +147,11 @@ float readPressure(void) {
   return (float)p/256;
 }
 
-float readAltitude(float seaLevelhPa) {
-  float altitude;
 
-  float pressure = readPressure(); // in Si units for Pascal
-  pressure /= 100;
-
-  altitude = 44330 * (1.0 - pow(pressure / seaLevelhPa, 0.1903));
-
-  return altitude;
-}
-int32_t comp_pres_BMP280(void){
-    ReadT_BMP280(); // Update t_fine variable
-    int32_t pres = ReadP_BMP280();
-    //pres =  bmp280_compensate_P_int32(pres);
-    //printf(" %lx %li\n",pres,pres);//-%02x %02x %02x\n",pres,buf[0],buf[1],buf[2]);
-    return pres;
-}
-
-float alt_BMP280(void){
-    int32_t pres = readPressure();
-    float alt = (1.f - powf(((float)pres)/101325.,0.190284))*145366.45;
-    alt = alt * 0.3048;
-
+float AltitudeBMP280(void){
+    int32_t pres = PressureBMP280();
+    alt = (1.f - powf(((float)pres)/101325.f,0.190284f))*145366.45f;
+    alt = alt * 0.3048f;
     printf(" %ld \n",(int32_t)(alt*100.));
+    return alt;
 }
-
-// CONF ADAFRUIT : temp oversample x1
-// pres oversample x16
-// MODE normal

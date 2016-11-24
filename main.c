@@ -45,29 +45,31 @@ FILE uart_output = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
 
 
 
+float alt2 = 0.f;
+int i = 0;
+extern float alt;
 int main(void)
 {
+    int pres = 0;
 	char c;
 	static const char pstring[] PROGMEM = 
 		"adapted for Atmel AVR and this demo by Martin Thomas\r\n";
 
     uart_init();
-	softuart_init();
-	softuart_turn_rx_on(); /* redundant - on by default */  
+	//softuart_init();
+	//softuart_turn_rx_on(); /* redundant - on by default */  
     i2c_init();
 	
 	sei();
 
 	
     stdout = &uart_output;
-
-   printf("BMP : 0x%x\n",InitBMP280());
-int pres;
-float alt;
+    printf("BMP : 0x%x\n",InitBMP280());
     while(1){
-        //pres= comp_pres_BMP280();
-        alt = alt_BMP280();
-        
+        for(i = 0; i<32000; i ++){
+        }
+        alt2 = AltitudeBMP280();
+        printf("%ld\n",(int32_t)(alt*100.));
         //printf("pres %d\n",pres);
     }
 
