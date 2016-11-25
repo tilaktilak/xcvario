@@ -135,8 +135,9 @@ float PressureBMP280(void) {
     ((var1 * (int64_t)dig_P2)<<12);
   var1 = (((((int64_t)1)<<47)+var1))*((int64_t)dig_P1)>>33;
 
+
   if (var1 == 0) {
-    return 0;  // avoid exception caused by division by zero
+    return -1.;  // avoid exception caused by division by zero
   }
   p = 1048576 - adc_P;
   p = (((p<<31) - var2)*3125) / var1;
@@ -149,9 +150,10 @@ float PressureBMP280(void) {
 
 
 float AltitudeBMP280(void){
-    int32_t pres = PressureBMP280();
+    float pres = 10;
+    pres = PressureBMP280();
     alt = (1.f - powf(((float)pres)/101325.f,0.190284f))*145366.45f;
     alt = alt * 0.3048f;
-    printf(" %ld \n",(int32_t)(alt*100.));
+    printf(" %f \n",alt);
     return alt;
 }
