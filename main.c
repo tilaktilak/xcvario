@@ -83,7 +83,6 @@ void set_flag_period(uint8_t f){
 
 int main(void)
 {
-    TCCR1B = _BV(CS10) | _BV(CS11);// prescaler=64 
     //OCR1A = ((F_CPU/2/64/TIMER_FREQ_HZ) - 1 );   
     // enable Output Compare 1 overflow interrupt
     //TIMSK1  = _BV(OCIE1A);   
@@ -103,19 +102,28 @@ int main(void)
     stdout = &uart_output;
     InitBMP280();
     float alt = 0.f;
-    const float dt = powf(2,16)*(64.f/16E6);
-    float old_alt = 0.f;
+    const float dt = powf(2,16)*(64.f/8E6);
+    float smooth_alt = 0.f;
+    float old_smooth_alt =0.f;
     float der_alt = 0.f;
     
-	for (;;) {
-    while((TIFR1 & (1<<TOV1))>0){// Wait until flag set
-        alt = AltitudeBMP280();
-        der_alt=(alt-old_alt)/dt;
-        old_alt = alt;
-        printf("%d 0\n",(int)(der_alt));//,(int)(der_alt*100));
+    TCCR1A = 0;
+    TCCR1B = 0;
+    TCCR1C = 0;
+    TCCR1B |=(1<<CS11);// | (1<<CS10);// (1<<CS10) | (1<<CS11);// prescaler=64 
+    smooth_alt = AltitudeBMP280();// Init
+    old_smooth_alt = smooth_alt;
+    alt = smooth_alt;
 
-        TIFR1 &= ~(1 << TOV1);
-    }
+	for (;;) {
+        while((TIFR1 & (1<<TOV1))!=(1<<TOV1));// Wait until flag set
+        TIFR1 |= (1 << TOV1);
+        alt = AltitudeBMP280();
+        smooth_alt = alt;//0.85f*old_smooth_alt + (1.f - 0.85f)*alt;
+        der_alt=(smooth_alt-old_smooth_alt)/dt;
+        old_smooth_alt = smooth_alt;
+        printf("%.2f %.2f\n",(double)(der_alt),(double)(smooth_alt));
+
 
 	
 		/*if ( softuart_kbhit() ) {
