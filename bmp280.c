@@ -73,6 +73,8 @@ int InitBMP280(){
 
     i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P9,1);
     i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P9+1,1);
+    
+    return 0;
 }
 
 int32_t ReadT_BMP280(void){
@@ -118,7 +120,7 @@ float TemperatureBMP280(void){
   float T  = (t_fine * 5 + 128) >> 8;
   return T/100;
 }
-
+float test1;
 float PressureBMP280(void) {
   int64_t var1, var2, p;
 
@@ -145,15 +147,15 @@ float PressureBMP280(void) {
   var2 = (((int64_t)dig_P8) * p) >> 19;
 
   p = ((p + var1 + var2) >> 8) + (((int64_t)dig_P7)<<4);
+  test1 = (float)p/256;
   return (float)p/256;
 }
 
 
 float AltitudeBMP280(void){
-    float pres = 10;
-    pres = PressureBMP280();
-    alt = (1.f - powf(((float)pres)/101325.f,0.190284f))*145366.45f;
+    float press = PressureBMP280();
+    float alt = 0.f;;
+    alt = (1.f - powf(((float)press)/101325.f,0.190284f))*145366.45f;
     alt = alt * 0.3048f;
-    printf(" %f \n",alt);
     return alt;
 }

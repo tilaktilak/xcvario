@@ -1,9 +1,9 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
-#include "softuart.h"
 #include <avr/io.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 
 #ifndef F_CPU
 #define F_CPU 800000000UL
@@ -14,6 +14,9 @@
 #endif
 #include <util/setbaud.h>
 
+#include "i2c_master.h"
+#include "bmp280.h"
+#include "softuart.h"
 /* http://www.cs.mun.ca/~rod/Winter2007/4723/notes/serial/serial.html */
 void uart_init(void) {
     UBRR0H = UBRRH_VALUE;
@@ -29,12 +32,13 @@ void uart_init(void) {
     UCSR0B = _BV(RXEN0) | _BV(TXEN0);   /* Enable RX and TX */    
 }
 
-void uart_putchar(char c, FILE *stream) {
+int uart_putchar(char c, FILE *stream) {
     if (c == '\n') {
         uart_putchar('\r', stream);
     }
     loop_until_bit_is_set(UCSR0A, UDRE0);
     UDR0 = c;
+    return 0;
 }
 
 char uart_getchar(FILE *stream) {
@@ -43,8 +47,9 @@ char uart_getchar(FILE *stream) {
 }
 FILE uart_output = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
 
+#define TIMER_FREQ_HZ   1
+/*
 void timerRtc_init(void){
-#define TIMER_FREQ_HZ   1 
 
     TCCR1B = _BV(CS10) | _BV(CS11)  | _BV(WGM12); // prescaler=64, clear timer/counter on compareA match 
     OCR1A = ((F_CPU/2/64/TIMER_FREQ_HZ) - 1 );   
@@ -52,34 +57,43 @@ void timerRtc_init(void){
     TIMSK1  = _BV(OCIE1A);   
 }
 
-uint64_t time_s = 0;
+//uint8_t flag_period = 0;
+uint64_t count_time = 0;
 ISR(TIMER1_COMPA_vect)    // handler for Output Compare 1 overflow interrupt
 {
-    time_s = time_s ++;
-}
+    count_time ++;
 
-uint64_t seconds(){
-    uint64_t result;
+    //flag_period = 1;
+}*/
+
+/*uint8_t get_flag_period(void){
+    uint8_t result = 0;
     cli();
-    result = time_s;
+    result = flag_period;
     sei();
     return result;
 }
 
+void set_flag_period(uint8_t f){
+    cli();
+    flag_period = f;
+    sei();
+}*/
 
-float alt2 = 0.f;
-int i = 0;
-extern float alt;
+
 int main(void)
 {
-    int pres = 0;
-	char c;
-	static const char pstring[] PROGMEM = 
-		"adapted for Atmel AVR and this demo by Martin Thomas\r\n";
+    TCCR1B = _BV(CS10) | _BV(CS11);// prescaler=64 
+    //OCR1A = ((F_CPU/2/64/TIMER_FREQ_HZ) - 1 );   
+    // enable Output Compare 1 overflow interrupt
+    //TIMSK1  = _BV(OCIE1A);   
+	//char c;
+	//static const char pstring[] PROGMEM = 
+	//	"adapted for Atmel AVR and this demo by Martin Thomas\r\n";
 
     uart_init();
-	//softuart_init();
-	//softuart_turn_rx_on(); /* redundant - on by default */  
+	softuart_init();
+	softuart_turn_rx_on(); /* redundant - on by default */  
     i2c_init();
     //timerRtc_init();
 	
@@ -87,23 +101,27 @@ int main(void)
 
 	
     stdout = &uart_output;
-    printf("BMP : 0x%x\n",InitBMP280());
-    while(1){
-        for(i = 0; i<32000; i ++){
-        }
-        alt2 = AltitudeBMP280();
-        //printf("%ld %ld\n",(int32_t)seconds(),(int32_t)(alt*100.));
-        //printf("%ld\n",(int32_t)(alt));
-        //printf("pres %d\n",pres);
+    InitBMP280();
+    float alt = 0.f;
+    const float dt = powf(2,16)*(64.f/16E6);
+    float old_alt = 0.f;
+    float der_alt = 0.f;
+    
+	for (;;) {
+    while((TIFR1 & (1<<TOV1))>0){// Wait until flag set
+        alt = AltitudeBMP280();
+        der_alt=(alt-old_alt)/dt;
+        old_alt = alt;
+        printf("%d 0\n",(int)(der_alt));//,(int)(der_alt*100));
+
+        TIFR1 &= ~(1 << TOV1);
     }
 
-	for (;;) {
 	
-		if ( softuart_kbhit() ) {
+		/*if ( softuart_kbhit() ) {
             c = softuart_getchar();
             putchar(c);
-        }
-	}
-	
+        }*/
+	}	
 	return 0; /* never reached */
 }

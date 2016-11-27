@@ -1,3 +1,6 @@
+
+#ifndef BMP280_H
+#define BMP280_H
 #define BMP280_ADDY 0xEC
 
 int InitBMP280(void);
@@ -6,7 +9,6 @@ float AltitudeBMP280(void);
 
 float PressureBMP280(void);
 
-float alt;
 int32_t t_fine;
 
 unsigned short dig_T1; 
@@ -24,4 +26,4 @@ short dig_P7;
 
 
 
-
+#endif

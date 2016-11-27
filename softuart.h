@@ -1,3 +1,5 @@
+#ifndef SOFTUART_H
+#define SOFTUART_H
 #if !defined(F_CPU)
     #warning "F_CPU not defined in makefile - now defined in softuart.h"
     #define F_CPU 8000000L
@@ -123,3 +125,4 @@ void softuart_puts_p( const char *prg_s );
 // Helper-Macro - "automatically" inserts PSTR
 // when used: include avr/pgmspace.h before this include-file
 #define softuart_puts_P(s___) softuart_puts_p(PSTR(s___))
+#endif
