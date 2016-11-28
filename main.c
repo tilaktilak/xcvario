@@ -79,14 +79,50 @@ void set_flag_period(uint8_t f){
     flag_period = f;
     sei();
 }*/
+void timer1_init(void){
+    // TIMER 1 Config for timing while 1
+    TCCR1A = 0;
+    TCCR1B = 0;
+    TCCR1C = 0;
+    TCCR1B |=(1<<CS11);//prescaler=8 
+}
 
+void timer2_init(void){
+    // TIMER 2 Config for PWM tone
+    TCCR2A = (1<<WGM21) | (1<<WGM20);
+    TCCR2B = (1<<CS20) | (0<<CS21) | (1<<CS22) |(1<<WGM22);
+    OCR2A = 0x00;
+    TIMSK2 = (1<<OCIE2A);
+
+    // Init A3 pin (PC3)
+    DDRC |= (1<<DDC3);
+    PORTC |= (1<<PORTC3);
+}
+// Fmin = 250Hz
+void timer2_set_freq(float freq){
+    cli();
+    OCR2A = (uint8_t)((1./freq)*8E6/128.f);
+    // PERIOD = 1s -> 8E6/128f
+    // PERIOD = 0.5s -> 
+    sei();
+}
+
+volatile int32_t duration = 0;
+volatile int32_t tim2_period = 0;//200;
+
+void timer2_set_duration(float d_sec){
+    cli();
+    duration = (int)(d_sec/2.f*(8E6/128.f)/(float)OCR2A);
+    tim2_period = duration;//Launch new period
+    sei();
+}
 
 int main(void)
 {
     //OCR1A = ((F_CPU/2/64/TIMER_FREQ_HZ) - 1 );   
     // enable Output Compare 1 overflow interrupt
     //TIMSK1  = _BV(OCIE1A);   
-	//char c;
+	char c;
 	//static const char pstring[] PROGMEM = 
 	//	"adapted for Atmel AVR and this demo by Martin Thomas\r\n";
 
@@ -111,10 +147,14 @@ int main(void)
     const float tau_alt = 0.7f;
     const float tau_der = 2.f;
     
-    TCCR1A = 0;
-    TCCR1B = 0;
-    TCCR1C = 0;
-    TCCR1B |=(1<<CS11);// | (1<<CS10);// (1<<CS10) | (1<<CS11);// prescaler=64 
+    timer1_init();
+
+    timer2_init();
+    timer2_set_freq(250.f);
+    timer2_set_duration(1.f);
+    
+
+    
     smooth_alt = AltitudeBMP280();// Init
     old_smooth_alt = smooth_alt;
     alt = smooth_alt;
@@ -128,13 +168,40 @@ int main(void)
         old_smooth_alt = smooth_alt;
         smooth_der_alt = ((1-tau_der)*old_smooth_der_alt + der_alt)/tau_der; 
         printf("%.2f %.2f\n",(double)(smooth_der_alt),(double)(smooth_alt));
+        //printf("PRS %5d\n",(int)PressureBMP280());
+
+        /*if(smooth_der_alt > low_level){
+        }*/
 
 
 	
-		/*if ( softuart_kbhit() ) {
+		if ( softuart_kbhit() ) {
             c = softuart_getchar();
             putchar(c);
-        }*/
+        }
 	}	
 	return 0; /* never reached */
 }
+
+
+void toggle_PC3(void){
+    if(PORTC&(1<<PORTC3)){
+        PORTC &= (0<<PORTC3);
+    }
+    else{
+        PORTC |= (1<<PORTC3);
+    }
+}
+
+ISR(TIMER2_COMPA_vect){
+static uint8_t state = 0;
+    if(state == 0){// Noisy half period
+        toggle_PC3();
+        if((--tim2_period)<=0) state = 1;
+    }
+    if(state == 1){// Mute half period
+        if(++tim2_period>=duration)state = 0;
+    }
+}
+
+
