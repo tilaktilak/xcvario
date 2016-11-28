@@ -32,7 +32,7 @@ int InitBMP280(){
     // tstdy =  0.5     /000
     // IRR = 4         /000
     // SPI ENABLE       /0
-    uint8_t config = 0b0000000;
+    uint8_t config = 0b001001000;
     i2c_writeReg(BMP_ADDR,REG_CONFIG,&config,1);
 
     uint8_t address = REG_CALIB_firstLSB;

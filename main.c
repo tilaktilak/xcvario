@@ -102,10 +102,14 @@ int main(void)
     stdout = &uart_output;
     InitBMP280();
     float alt = 0.f;
-    const float dt = powf(2,16)*(64.f/8E6);
+    const float dt = powf(2,16)*(8.f/8E6);
     float smooth_alt = 0.f;
     float old_smooth_alt =0.f;
     float der_alt = 0.f;
+    float smooth_der_alt = 0.f;
+    float old_smooth_der_alt = 0.f;
+    const float tau_alt = 0.7f;
+    const float tau_der = 2.f;
     
     TCCR1A = 0;
     TCCR1B = 0;
@@ -119,10 +123,11 @@ int main(void)
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1));// Wait until flag set
         TIFR1 |= (1 << TOV1);
         alt = AltitudeBMP280();
-        smooth_alt = alt;//0.85f*old_smooth_alt + (1.f - 0.85f)*alt;
+        smooth_alt = tau_alt*old_smooth_alt + (1.f - tau_alt)*alt;
         der_alt=(smooth_alt-old_smooth_alt)/dt;
         old_smooth_alt = smooth_alt;
-        printf("%.2f %.2f\n",(double)(der_alt),(double)(smooth_alt));
+        smooth_der_alt = ((1-tau_der)*old_smooth_der_alt + der_alt)/tau_der; 
+        printf("%.2f %.2f\n",(double)(smooth_der_alt),(double)(smooth_alt));
 
 
 	
