@@ -109,6 +109,7 @@ void timer2_set_freq(float freq){
 
 volatile int32_t duration = 0;
 volatile int32_t tim2_period = 0;//200;
+volatile uint8_t mute = 0;
 
 void timer2_set_duration(float d_sec){
     cli();
@@ -119,12 +120,7 @@ void timer2_set_duration(float d_sec){
 
 int main(void)
 {
-    //OCR1A = ((F_CPU/2/64/TIMER_FREQ_HZ) - 1 );   
-    // enable Output Compare 1 overflow interrupt
-    //TIMSK1  = _BV(OCIE1A);   
-	char c;
-	//static const char pstring[] PROGMEM = 
-	//	"adapted for Atmel AVR and this demo by Martin Thomas\r\n";
+	//char c;
 
     uart_init();
 	softuart_init();
@@ -146,14 +142,19 @@ int main(void)
     float old_smooth_der_alt = 0.f;
     const float tau_alt = 0.7f;
     const float tau_der = 2.f;
+    float freq = 300.f;
+    float const low_level = -0.5f;
+    float const high_level = 0.5f;
+    float const low_gain = -50.f;
+    float const low_offset = 300.f;
+    float const high_gain = 150.f;
+    float const high_offset = 1100.f;
     
     timer1_init();
 
     timer2_init();
     timer2_set_freq(250.f);
-    timer2_set_duration(1.f);
-    
-
+    timer2_set_duration(3.f);
     
     smooth_alt = AltitudeBMP280();// Init
     old_smooth_alt = smooth_alt;
@@ -167,29 +168,49 @@ int main(void)
         der_alt=(smooth_alt-old_smooth_alt)/dt;
         old_smooth_alt = smooth_alt;
         smooth_der_alt = ((1-tau_der)*old_smooth_der_alt + der_alt)/tau_der; 
-        printf("%.2f %.2f\n",(double)(smooth_der_alt),(double)(smooth_alt));
+        printf("%.2f %.2f\n",(double)(smooth_der_alt),
+                (double)(smooth_alt));
         //printf("PRS %5d\n",(int)PressureBMP280());
 
-        /*if(smooth_der_alt > low_level){
-        }*/
+        //FIXME DEBUG
+        smooth_der_alt = 0.f;
+        if(smooth_der_alt < low_level){
+            mute = 0;
+            freq = low_gain*fabs(smooth_der_alt) + low_offset;
+        }
+        else if(smooth_der_alt > high_level){
+            mute = 0;
+            freq = smooth_der_alt * high_gain + high_offset;
+        }
+        else {
+            mute = 1;// Mute
+        }
 
+        // Constraint freq
+        if(freq<250.f)freq = 250.f;
 
+        timer2_set_freq(freq);
+
+/*
 	
 		if ( softuart_kbhit() ) {
             c = softuart_getchar();
             putchar(c);
         }
+        */
 	}	
 	return 0; /* never reached */
 }
 
 
 void toggle_PC3(void){
-    if(PORTC&(1<<PORTC3)){
-        PORTC &= (0<<PORTC3);
-    }
-    else{
-        PORTC |= (1<<PORTC3);
+    if(!mute){
+        if(PORTC&(1<<PORTC3)){
+            PORTC &= (0<<PORTC3);
+        }
+        else{
+            PORTC |= (1<<PORTC3);
+        }
     }
 }
 
