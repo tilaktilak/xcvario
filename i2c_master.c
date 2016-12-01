@@ -13,15 +13,6 @@
 
 void i2c_init(void)
 {
-    //#MUCR |= (0<<PUD);
-/*    MCUCR &= ~(1u << PUD);
-    //PORTC |= (1<<PORTC5) | (1<<PORTC4);
-    //DDR
-DDRC &= ~(1 << DDC5); // SCL, Clear the PC5 pin, PC5 is now an input
-PORTC |= (1 << PORTC5); // SCL, turn On the Pull-up PC5 is now an input with pull-up enabled
-DDRC &= ~(1 << DDC4); // SDA
-PORTC |= (1 << PORTC4); // SDA
-*/
     TWSR = 0;
 	TWBR = (uint8_t)TWBR_val;
     TWBR = ((F_CPU/F_SCL)-16)/2;  /* must be > 10 for stable operation */
