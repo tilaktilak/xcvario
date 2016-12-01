@@ -120,13 +120,12 @@ void timer2_set_duration(float d_sec){
 
 int main(void)
 {
-	//char c;
+	char c;
 
     uart_init();
 	softuart_init();
 	softuart_turn_rx_on(); /* redundant - on by default */  
     i2c_init();
-    printf("coucou\n");
 	
 	sei();
 
@@ -139,10 +138,10 @@ int main(void)
     float smooth_alt = 0.f;
     float old_smooth_alt =0.f;
     float der_alt = 0.f;
-    float smooth_der_alt = 0.f;
+    float smooth_der_alt = 0.0f;
     float old_smooth_der_alt = 0.f;
     const float tau_alt = 0.7f;
-    const float tau_der = 2.f;
+    const float tau_der = 0.7f;
     float freq = 300.f;
     float const low_level = -0.5f;
     float const high_level = 0.5f;
@@ -150,6 +149,12 @@ int main(void)
     float const low_offset = 300.f;
     float const high_gain = 150.f;
     float const high_offset = 1100.f;
+
+    int const der_count_max = 3;
+    int der_count = 0;
+
+    int const prs_count_max = 3;
+    int prs_count = 0;
    
     timer1_init();
 
@@ -166,16 +171,25 @@ int main(void)
         TIFR1 |= (1 << TOV1);
         alt = AltitudeBMP280();
         smooth_alt = tau_alt*old_smooth_alt + (1.f - tau_alt)*alt;
-        der_alt=(smooth_alt-old_smooth_alt)/dt;
-        old_smooth_alt = smooth_alt;
-        smooth_der_alt = ((1-tau_der)*old_smooth_der_alt + der_alt)/tau_der; 
+        if(++der_count>=der_count_max){
+            der_count = 0;
+            der_alt=(smooth_alt-old_smooth_alt)/dt;
+            old_smooth_alt = smooth_alt;
+            //smooth_der_alt = ((1-tau_der)*old_smooth_der_alt + der_alt)/tau_der; 
+            smooth_der_alt = tau_der*old_smooth_der_alt + (1-tau_der)*der_alt;
+        }
+
+        if(++prs_count>=prs_count_max){
+            prs_count = 0;
+            printf("PRS %5d\n",(int)PressureBMP280());
+        }
+
         
-        printf("%.2f %.2f\n",(double)(smooth_der_alt),
-                (double)(smooth_alt));
-        //printf("PRS %5d\n",(int)PressureBMP280());
+        //printf("%.2f %.2f\n",(double)(smooth_der_alt),
+        //        (double)(smooth_alt));
 
         //FIXME DEBUG
-        smooth_der_alt = 0.f;
+        //smooth_der_alt = 0.f;
         if(smooth_der_alt < low_level){
             mute = 0;
             freq = low_gain*fabs(smooth_der_alt) + low_offset;
@@ -193,13 +207,13 @@ int main(void)
 
         timer2_set_freq(freq);
 
-/*
+
 	
 		if ( softuart_kbhit() ) {
             c = softuart_getchar();
             putchar(c);
         }
-        */
+        
 	}	
 	return 0; /* never reached */
 }
