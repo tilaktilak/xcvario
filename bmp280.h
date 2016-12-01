@@ -10,19 +10,23 @@ float AltitudeBMP280(void);
 float PressureBMP280(void);
 
 int32_t t_fine;
-
-unsigned short dig_T1; 
-short dig_T2;
-short dig_T3;
-short dig_P6;
-short dig_P5;
-short dig_P4;
-short dig_P3;
-short dig_P2;
-unsigned short dig_P1;
-short dig_P9;
-short dig_P8;
-short dig_P7;
+union {
+    struct {
+        uint16_t dig_T1; 
+        int16_t dig_T2;
+        int16_t dig_T3;
+        uint16_t dig_P1;
+        int16_t dig_P2;
+        int16_t dig_P3;
+        int16_t dig_P4;
+        int16_t dig_P5;
+        int16_t dig_P6;
+        int16_t dig_P7;
+        int16_t dig_P8;
+        int16_t dig_P9;
+    };
+    uint8_t buff[24];
+}b;
 
 
 

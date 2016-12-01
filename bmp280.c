@@ -16,65 +16,57 @@
 
 #include "i2c_master.h"
 #include <avr/io.h>
+#include <stdio.h>
 
 int InitBMP280(){
     uint8_t data;
+    uint8_t retval = 0;
 
     i2c_readReg(BMP_ADDR,REG_ID,&data,1);
     if(data != 0x58) return 1;
-    
+
+    //uint8_t reset = 0xB6;
+    //i2c_writeReg(BMP_ADDR,REG_RESET,&reset,1);
+
     // OSRS_T = x2      / 010
     // OSRS_P = x16     / 101
     // Mode NORMAL      / 11
     uint8_t ctrl_meas = 0b01010111;
-    i2c_writeReg(BMP_ADDR,REG_CTRL_MEAS,&ctrl_meas,1);
+    retval += i2c_writeReg(BMP_ADDR,REG_CTRL_MEAS,&ctrl_meas,1);
 
+    // WARNING ! Will write on reserved bit
     // tstdy =  0.5     /000
     // IRR = 4         /000
     // SPI ENABLE       /0
-    uint8_t config = 0b001001000;
-    i2c_writeReg(BMP_ADDR,REG_CONFIG,&config,1);
+    //uint8_t config = 0b01001000;
+    //uint8_t config = 0x00;
+    //retval += i2c_writeReg(BMP_ADDR,REG_CONFIG,&config,1);
 
     uint8_t address = REG_CALIB_firstLSB;
-
     // Get Calibration Data
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T1,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T1+1,1);
 
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T2,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T2+1,1);
-    
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T3,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_T3+1,1);
 
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P1,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P1+1,1);
+    retval += i2c_readReg(BMP_ADDR,address,b.buff,24);
+   
+/*
 
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P2,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P2+1,1);
-
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P3,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P3+1,1);
-
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P4,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P4+1,1);
-
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P5,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P5+1,1);
-
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P6,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P6+1,1);
-
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P7,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P7+1,1);
-
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P8,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P8+1,1);
-
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P9,1);
-    i2c_readReg(BMP_ADDR,address++,(uint8_t*)&dig_P9+1,1);
-    
-    return 0;
+b.dig_T1 = 27504;
+b.dig_T2 =    26435;
+b.dig_T3 =-1000;
+b.dig_P1 =36477;
+b.dig_P2 =-10685;
+b.dig_P3 =3024;
+b.dig_P4 =2855;
+b.dig_P5 =140;
+b.dig_P6 =-7;  
+b.dig_P7 =15500;
+b.dig_P8 =-14600;
+b.dig_P9 =6000;*/
+    /*printf("%d %d %d %d %d %d %d %d %d %d %d %d\n",b.dig_T1,b.dig_T2,b.dig_T3,
+            b.dig_P1,b.dig_P2,b.dig_P3,b.dig_P4,b.dig_P5,b.dig_P6,
+            b.dig_P7,b.dig_P8,b.dig_P9);
+    */
+    return retval;
 }
 
 int32_t ReadT_BMP280(void){
@@ -108,12 +100,12 @@ float TemperatureBMP280(void){
 
   int32_t adc_T = ReadT_BMP280();
 
-  var1  = ((((adc_T>>3) - ((int32_t)dig_T1 <<1))) *
-	   ((int32_t)dig_T2)) >> 11;
+  var1  = ((((adc_T>>3) - ((int32_t)b.dig_T1 <<1))) *
+	   ((int32_t)b.dig_T2)) >> 11;
 
-  var2  = (((((adc_T>>4) - ((int32_t)dig_T1)) *
-	     ((adc_T>>4) - ((int32_t)dig_T1))) >> 12) *
-	   ((int32_t)dig_T3)) >> 14;
+  var2  = (((((adc_T>>4) - ((int32_t)b.dig_T1)) *
+	     ((adc_T>>4) - ((int32_t)b.dig_T1))) >> 12) *
+	   ((int32_t)b.dig_T3)) >> 14;
 
   t_fine = var1 + var2;
 
@@ -130,12 +122,12 @@ float PressureBMP280(void) {
   int32_t adc_P = ReadP_BMP280();
 
   var1 = ((int64_t)t_fine) - 128000;
-  var2 = var1 * var1 * (int64_t)dig_P6;
-  var2 = var2 + ((var1*(int64_t)dig_P5)<<17);
-  var2 = var2 + (((int64_t)dig_P4)<<35);
-  var1 = ((var1 * var1 * (int64_t)dig_P3)>>8) +
-    ((var1 * (int64_t)dig_P2)<<12);
-  var1 = (((((int64_t)1)<<47)+var1))*((int64_t)dig_P1)>>33;
+  var2 = var1 * var1 * (int64_t)b.dig_P6;
+  var2 = var2 + ((var1*(int64_t)b.dig_P5)<<17);
+  var2 = var2 + (((int64_t)b.dig_P4)<<35);
+  var1 = ((var1 * var1 * (int64_t)b.dig_P3)>>8) +
+    ((var1 * (int64_t)b.dig_P2)<<12);
+  var1 = (((((int64_t)1)<<47)+var1))*((int64_t)b.dig_P1)>>33;
 
 
   if (var1 == 0) {
@@ -143,10 +135,10 @@ float PressureBMP280(void) {
   }
   p = 1048576 - adc_P;
   p = (((p<<31) - var2)*3125) / var1;
-  var1 = (((int64_t)dig_P9) * (p>>13) * (p>>13)) >> 25;
-  var2 = (((int64_t)dig_P8) * p) >> 19;
+  var1 = (((int64_t)b.dig_P9) * (p>>13) * (p>>13)) >> 25;
+  var2 = (((int64_t)b.dig_P8) * p) >> 19;
 
-  p = ((p + var1 + var2) >> 8) + (((int64_t)dig_P7)<<4);
+  p = ((p + var1 + var2) >> 8) + (((int64_t)b.dig_P7)<<4);
   test1 = (float)p/256;
   return (float)p/256;
 }

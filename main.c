@@ -126,13 +126,14 @@ int main(void)
 	softuart_init();
 	softuart_turn_rx_on(); /* redundant - on by default */  
     i2c_init();
-    //timerRtc_init();
+    printf("coucou\n");
 	
 	sei();
 
 	
     stdout = &uart_output;
-    InitBMP280();
+
+    printf("%d\n",InitBMP280());
     float alt = 0.f;
     const float dt = powf(2,16)*(8.f/8E6);
     float smooth_alt = 0.f;
@@ -149,7 +150,7 @@ int main(void)
     float const low_offset = 300.f;
     float const high_gain = 150.f;
     float const high_offset = 1100.f;
-    
+   
     timer1_init();
 
     timer2_init();
@@ -168,6 +169,7 @@ int main(void)
         der_alt=(smooth_alt-old_smooth_alt)/dt;
         old_smooth_alt = smooth_alt;
         smooth_der_alt = ((1-tau_der)*old_smooth_der_alt + der_alt)/tau_der; 
+        
         printf("%.2f %.2f\n",(double)(smooth_der_alt),
                 (double)(smooth_alt));
         //printf("PRS %5d\n",(int)PressureBMP280());
