@@ -120,7 +120,7 @@ void timer2_set_duration(float d_sec){
 
 int main(void)
 {
-	char c;
+	//char c;
 
     uart_init();
 	softuart_init();
@@ -141,7 +141,7 @@ int main(void)
     float smooth_der_alt = 0.0f;
     float old_smooth_der_alt = 0.f;
     const float tau_alt = 0.7f;
-    const float tau_der = 0.7f;
+    const float tau_der = 0.8f;
     float freq = 300.f;
     float const low_level = -0.5f;
     float const high_level = 0.5f;
@@ -153,8 +153,11 @@ int main(void)
     int const der_count_max = 3;
     int der_count = 0;
 
-    int const prs_count_max = 3;
+    int const prs_count_max = 10;
     int prs_count = 0;
+
+    int const freq_count_max = 10;
+    int freq_count = 0;
    
     timer1_init();
 
@@ -167,7 +170,12 @@ int main(void)
     alt = smooth_alt;
 
 	for (;;) {
-        while((TIFR1 & (1<<TOV1))!=(1<<TOV1));// Wait until flag set
+        while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
+            //if ( softuart_kbhit() ) {
+            //    c = softuart_getchar();
+                //putchar(c);
+            //}
+        }
         TIFR1 |= (1 << TOV1);
         alt = AltitudeBMP280();
         smooth_alt = tau_alt*old_smooth_alt + (1.f - tau_alt)*alt;
@@ -177,45 +185,43 @@ int main(void)
             old_smooth_alt = smooth_alt;
             //smooth_der_alt = ((1-tau_der)*old_smooth_der_alt + der_alt)/tau_der; 
             smooth_der_alt = tau_der*old_smooth_der_alt + (1-tau_der)*der_alt;
+
         }
 
         if(++prs_count>=prs_count_max){
             prs_count = 0;
-            printf("PRS %5d\n",(int)PressureBMP280());
+            //printf("PRS %5x\n",(int)PressureBMP280());
         }
 
-        
-        //printf("%.2f %.2f\n",(double)(smooth_der_alt),
-        //        (double)(smooth_alt));
+        if(freq_count>=freq_count_max){
+            if(smooth_der_alt < low_level){
+                mute = 0;
+                freq = low_gain*fabs(smooth_der_alt) + low_offset;
+            }
+            else if(smooth_der_alt > high_level){
+                mute = 0;
+                freq = smooth_der_alt * high_gain + high_offset;
+            }
+            else {
+                mute = 1;// Mute
+            }
+            freq_count = 0;
+            // Constraint freq
+            if(freq<250.f)freq = 250.f;
 
-        //FIXME DEBUG
-        //smooth_der_alt = 0.f;
-        if(smooth_der_alt < low_level){
-            mute = 0;
-            freq = low_gain*fabs(smooth_der_alt) + low_offset;
+            timer2_set_freq(freq);
         }
-        else if(smooth_der_alt > high_level){
-            mute = 0;
-            freq = smooth_der_alt * high_gain + high_offset;
-        }
-        else {
-            mute = 1;// Mute
-        }
 
-        // Constraint freq
-        if(freq<250.f)freq = 250.f;
-
-        timer2_set_freq(freq);
+        printf("%.2f %.2f\n",(double)(smooth_der_alt),
+                (double)(smooth_alt));
 
 
-	
-		if ( softuart_kbhit() ) {
-            c = softuart_getchar();
-            putchar(c);
-        }
-        
-	}	
-	return 0; /* never reached */
+
+
+
+
+    }	
+    return 0; /* never reached */
 }
 
 
