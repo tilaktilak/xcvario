@@ -33,9 +33,9 @@ void uart_init(void) {
 }
 
 int uart_putchar(char c, FILE *stream) {
-    if (c == '\n') {
+    /*if (c == '\n') {
         uart_putchar('\r', stream);
-    }
+    }*/
     loop_until_bit_is_set(UCSR0A, UDRE0);
     UDR0 = c;
     return 0;
@@ -124,8 +124,8 @@ int main(void)
     int const der_count_max = 10;
     int der_count = 0;
 
-    int const prs_count_max = 10;
-    int prs_count = 10;
+    int const prs_count_max = 120;
+    int prs_count = 0;
 
     //int const freq_count_max = 5;
     //int freq_count = 0;
@@ -142,7 +142,7 @@ int main(void)
 
 	for (;;) {
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
-            if ( softuart_kbhit() ) {
+            while( softuart_kbhit() ) {
                 c = softuart_getchar();
                 putchar(c);
             }
@@ -160,7 +160,7 @@ int main(void)
 
         if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
             prs_count = 0;
-            printf("PRS %5x\n",(int)PressureBMP280());
+            //printf("PRS %5x\n",(int)PressureBMP280());
         }
 
         if(tone_done==1){
@@ -204,6 +204,9 @@ void toggle_PC3(void){
         else{
             PORTC |= (1<<PORTC3);
         }
+    }
+    else{
+        PORTC &= (0<<PORTC3);
     }
 }
 
