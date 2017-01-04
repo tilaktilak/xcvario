@@ -66,7 +66,7 @@ void timer2_init(void){
 
     // Init A3 pin (PC3)
     DDRC |= (1<<DDC3);
-    PORTC |= (0<<PORTC3);
+    PORTC &= ~(1<<PORTC3);
 }
 // Fmin = 250Hz
 void timer2_set_freq(float freq){
