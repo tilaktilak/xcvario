@@ -21,7 +21,7 @@
 void uart_init(void) {
     UBRR0H = UBRRH_VALUE;
     UBRR0L = UBRRL_VALUE;
-    
+
 #if USE_2X
     UCSR0A |= _BV(U2X0);
 #else
@@ -33,9 +33,6 @@ void uart_init(void) {
 }
 
 int uart_putchar(char c, FILE *stream) {
-    /*if (c == '\n') {
-        uart_putchar('\r', stream);
-    }*/
     loop_until_bit_is_set(UCSR0A, UDRE0);
     UDR0 = c;
     return 0;
@@ -80,6 +77,7 @@ void timer2_set_freq(float freq){
 volatile int32_t duration = 0;
 volatile int32_t tim2_period = 0;//200;
 volatile uint8_t mute = 0;
+volatile uint8_t state = 0;
 
 void timer2_set_duration(float d_sec){
     cli();
@@ -91,28 +89,30 @@ void timer2_set_duration(float d_sec){
 volatile uint8_t tone_done = 0;
 int main(void)
 {
-	char c = ' ';
+    char c = ' ';
 
     uart_init();
-	softuart_init();
-	softuart_turn_rx_on(); /* redundant - on by default */  
+    softuart_init();
+    softuart_turn_rx_on(); /* redundant - on by default */  
     i2c_init();
-	
-	sei();
 
-	
+    sei();
+
+
     stdout = &uart_output;
 
-    printf("%d\n",InitBMP280());
+    InitBMP280();
+
     float alt = 0.f;
     const float dt = powf(2,16)*(1.f/8E6);
     float smooth_alt = 0.f;
     float old_smooth_alt =0.f;
+    //float old_smooth_alt2 =0.f;
     float der_alt = 0.f;
     float smooth_der_alt = 0.0f;
-    float old_smooth_der_alt = 0.f;
-    const float tau_alt = 0.90f;
-    const float tau_der = 0.92f;
+    //float old_smooth_der_alt = 0.f;
+    const float tau_alt = 0.93f;
+    const float tau_der = 0.5f;
     float freq = 300.f;
     float const low_level = -0.5f;
     float const high_level = 0.5f;
@@ -121,46 +121,47 @@ int main(void)
     float const high_gain = 150.f;
     float const high_offset = 1100.f;
 
-    int const der_count_max = 10;
+    int const der_count_max = 35;
     int der_count = 0;
 
     int const prs_count_max = 120;
     int prs_count = 0;
 
-    //int const freq_count_max = 5;
-    //int freq_count = 0;
-   
     timer1_init();
 
     timer2_init();
     timer2_set_freq(250.f);
     timer2_set_duration(1.f);
-    
+
     smooth_alt = AltitudeBMP280();// Init
     old_smooth_alt = smooth_alt;
     alt = smooth_alt;
 
-	for (;;) {
+    float time = 0.f;
+
+    for (;;) {
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
             while( softuart_kbhit() ) {
                 c = softuart_getchar();
-                putchar(c);
+                //putchar(c);
             }
         }
+        time += dt;
         TIFR1 |= (1 << TOV1);
+
         alt = AltitudeBMP280();
-        smooth_alt = tau_alt*old_smooth_alt + (1.f - tau_alt)*alt;
+        smooth_alt = tau_alt*smooth_alt + (1.f - tau_alt)*alt;
         if(++der_count>=der_count_max){
             der_count = 0;
-            der_alt=(smooth_alt-old_smooth_alt)/dt;
+            der_alt=(smooth_alt-old_smooth_alt)/(dt*der_count_max);
             old_smooth_alt = smooth_alt;
-            //smooth_der_alt = ((1-tau_der)*old_smooth_der_alt + der_alt)/tau_der; 
-            smooth_der_alt = tau_der*old_smooth_der_alt + (1-tau_der)*der_alt;
+            smooth_der_alt = tau_der*smooth_der_alt + (1-tau_der)*der_alt;
         }
+        printf("%f %f %f\r\n",(double)time, (double)smooth_alt,(double)smooth_der_alt);
 
         if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
             prs_count = 0;
-            //printf("PRS %5x\n",(int)PressureBMP280());
+            //printf("PRS %05x\n",(int)PressureBMP280());
         }
 
         if(tone_done==1){
@@ -183,13 +184,6 @@ int main(void)
             tone_done = 0;
         }
 
-            //printf("%.2f %.2f\n",(double)((der_alt)),
-            //        (double)(smooth_der_alt));
-
-
-
-
-
 
     }	
     return 0; /* never reached */
@@ -211,7 +205,6 @@ void toggle_PC3(void){
 }
 
 ISR(TIMER2_COMPA_vect){
-static uint8_t state = 0;
     if(state == 0){// Noisy half period
         toggle_PC3();
         if((--tim2_period)<=0) state = 1;
