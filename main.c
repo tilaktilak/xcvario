@@ -92,7 +92,6 @@ int parse_nmea(uint8_t c){
     static int i = 0;
     static int i_comma = 0;
     static int nb_comma = 0;
-    static uint8_t time[7]={'0'};
     static uint8_t alt[10]={'0'};
     if( i==0){
         if(c == '$'){i++;}
@@ -121,39 +120,7 @@ int parse_nmea(uint8_t c){
         if(c == ','){i++;}
         else{i=0;}
     }
-    else if(i==7){
-        i++;
-        time[0]=c;
-    }
-    else if(i==8){
-        i++;
-        time[1]=c;
-    }
-    else if(i==9){
-        i++;
-        time[2]=c;
-    }
-    else if(i==10){
-        i++;
-        time[3]=c;
-    }
-    else if(i==11){
-        i++;
-        time[4]=c;
-    }
-    else if(i==12){
-        time[5] = c;
-        time[6] = '\0';
-        printf("[[[%c%c%c%c%c%c]]]\r\n",time[0],
-                time[1],
-                time[2],
-                time[3],
-                time[4],
-                time[5]
-              );
-        i++;
-    }
-    else if(i>12){
+    else if(i>6){
         i++;
         if(c==','){nb_comma++;}
         if(nb_comma==8){
@@ -163,16 +130,9 @@ int parse_nmea(uint8_t c){
             }
         } 
         else if(nb_comma==9){
-            printf("[[[%c%c%c%c%c%c]]]%d\r\n",alt[0],
-                    alt[1],
-                    alt[2],
-                    alt[3],
-                    alt[4],
-                    alt[5],
-                    i_comma
-                  );
             alt[(i_comma<sizeof(alt)?i_comma:sizeof(alt))] = '\0';
-            printf("%f\r\n",atof((const char*)alt));
+            // Here set altitude global variable
+            altitude = atof((const char*)alt);
 
             i_comma=0;
             nb_comma = 0;
@@ -243,7 +203,7 @@ int main(void)
             while( softuart_kbhit() ) {
                 c = softuart_getchar();
                 parse_nmea(c);
-                //putchar(c);
+                putchar(c);
             }
         }
         time += dt;
