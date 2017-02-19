@@ -2,6 +2,7 @@
 #include <avr/pgmspace.h>
 #include <avr/io.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
 
@@ -86,6 +87,104 @@ void timer2_set_duration(float d_sec){
     sei();
 }
 
+float altitude = 0.f;
+int parse_nmea(uint8_t c){
+    static int i = 0;
+    static int i_comma = 0;
+    static int nb_comma = 0;
+    static uint8_t time[7]={'0'};
+    static uint8_t alt[10]={'0'};
+    if( i==0){
+        if(c == '$'){i++;}
+    }
+    else if(i==1){
+        if(c == 'G'){i++;}
+        else{i=0;}
+    }
+    else if(i==2){
+        if(c == 'P'){i++;}
+        else{i=0;}
+    } 
+    else if(i==3){
+        if(c == 'G'){i++;}
+        else{i=0;}
+    } 
+    else if(i==4){
+        if(c == 'G'){i++;}
+        else{i=0;}
+    } 
+    else if(i==5){
+        if(c == 'A'){i++;}
+        else{i=0;}
+    } 
+    else if(i==6){
+        if(c == ','){i++;}
+        else{i=0;}
+    }
+    else if(i==7){
+        i++;
+        time[0]=c;
+    }
+    else if(i==8){
+        i++;
+        time[1]=c;
+    }
+    else if(i==9){
+        i++;
+        time[2]=c;
+    }
+    else if(i==10){
+        i++;
+        time[3]=c;
+    }
+    else if(i==11){
+        i++;
+        time[4]=c;
+    }
+    else if(i==12){
+        time[5] = c;
+        time[6] = '\0';
+        printf("[[[%c%c%c%c%c%c]]]\r\n",time[0],
+                time[1],
+                time[2],
+                time[3],
+                time[4],
+                time[5]
+              );
+        i++;
+    }
+    else if(i>12){
+        i++;
+        if(c==','){nb_comma++;}
+        if(nb_comma==8){
+            i_comma++;
+            if(i_comma>1){
+                alt[i_comma-2]=c;
+            }
+        } 
+        else if(nb_comma==9){
+            printf("[[[%c%c%c%c%c%c]]]%d\r\n",alt[0],
+                    alt[1],
+                    alt[2],
+                    alt[3],
+                    alt[4],
+                    alt[5],
+                    i_comma
+                  );
+            alt[(i_comma<sizeof(alt)?i_comma:sizeof(alt))] = '\0';
+            printf("%f\r\n",atof((const char*)alt));
+
+            i_comma=0;
+            nb_comma = 0;
+            i=0;
+        }
+    }
+    else{
+        i = 0;
+    }
+    return 0;
+}
+
 volatile uint8_t tone_done = 0;
 int main(void)
 {
@@ -143,6 +242,7 @@ int main(void)
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
             while( softuart_kbhit() ) {
                 c = softuart_getchar();
+                parse_nmea(c);
                 //putchar(c);
             }
         }
@@ -157,7 +257,7 @@ int main(void)
             old_smooth_alt = smooth_alt;
             smooth_der_alt = tau_der*smooth_der_alt + (1-tau_der)*der_alt;
         }
-        printf("%f %f %f\r\n",(double)time, (double)smooth_alt,(double)smooth_der_alt);
+        //printf("%f %f %f\r\n",(double)time, (double)smooth_alt,(double)smooth_der_alt);
 
         if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
             prs_count = 0;
