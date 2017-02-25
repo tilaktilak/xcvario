@@ -48,12 +48,21 @@ FILE uart_output = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
 
 #define TIMER_FREQ_HZ   1
 
+//const float dt = powf(2,16)*(1.f/8E6);
+const float dt = 0.008f;
+float time = 0.f;
 void timer1_init(void){
     // TIMER 1 Config for timing while 1
     TCCR1A = 0;
     TCCR1B = 0;
     TCCR1C = 0;
     TCCR1B |=(1<<CS10);//prescaler=1 
+    //Enable Overflow Interrupt Enable
+    TIMSK1|=(1<<TOIE1);
+}
+ISR(TIMER1_OVF_vect)
+{
+time += dt;
 }
 
 void timer2_init(void){
@@ -166,7 +175,6 @@ int main(void)
 
     float alt      = 0.f;
     float rate     = 0.f;
-    const float dt = powf(2,16)*(1.f/8E6);
     float smooth_alt = 0.f;
 
     //float old_smooth_alt =0.f;
@@ -203,23 +211,25 @@ int main(void)
     //old_smooth_alt = smooth_alt;
     //alt = smooth_alt;
 
-    float time = 0.f;
+    float old_time = 0.f;
+
 
     for (;;) {
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
+        //while((time-old_time)<0.008f){
             while( softuart_kbhit() ) {
                 c = softuart_getchar();
                 //parse_nmea(c);
                 //putchar(c);
             }
         }
-        time += dt;
-        TIFR1 |= (1 << TOV1);
+        //TIFR1 |= (1 << TOV1);
+        //time += dt;
 
-mute = 1;
         alt = AltitudeBMP280();
-        kalman_predict();
+        kalman_predict(time-old_time);
         kalman_update(alt);
+        old_time = time;
         smooth_alt = X[0];
         rate = X[1];
         /*smooth_alt = tau_alt*smooth_alt + (1.f - tau_alt)*alt;
@@ -238,11 +248,11 @@ mute = 1;
 
         if(tone_done==1){
             if(rate < low_level){
-                //mute = 0;
+                mute = 0;
                 freq = low_gain*fabs(rate) + low_offset;
             }
             else if(rate > high_level){
-                //mute = 0;
+                mute = 0;
                 freq = rate * high_gain + high_offset;
             }
             else {

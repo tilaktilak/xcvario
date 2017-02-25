@@ -8,6 +8,6 @@ int kalman_init(float altitude_init);
 
 int kalman_update(float alt);
 
-int kalman_predict(void);
+int kalman_predict(float dt);
 
 #endif

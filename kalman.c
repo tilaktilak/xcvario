@@ -108,10 +108,9 @@ printf("%f %f\r\n %f %f\r\n",K[0][0],
                   float *Q,
                   float *X){
                   */
-int kalman_predict(void){
+int kalman_predict(float dt){
 //X[0] = 73.5231f;
 //X[1] = 0.0006f;
-    const float dt = 0.008f;
 
     //X = A.X
     Xp[0] = X[0] + dt*X[1];

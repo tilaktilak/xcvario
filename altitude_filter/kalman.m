@@ -3,20 +3,30 @@ close all;
 clear all;
 clc;
 
-data = csvread('log.csv');
+data = csvread('log4.csv');
 time = data(:,1);
 alt = data(:,2);
 smoothed_alt = data(:,3);
 rate = data(:,4);
 
+plot(time,alt,'b');
+hold on;
+plot(time,smoothed_alt,'r');
+figure
+plot(time,rate);
+%figure
 
-fe = 125; % fréquence d'échantillonnage
-temps = 2; % temps total de mesure en seconde
+fe = 125 % fréquence d'échantillonnage
+temps = 1; % temps total de mesure en seconde
 t=(0:1/fe:temps-1/fe);
 
 % Calcul des vecteur d'états à estimer (le vecteur d'état est normalement l'inconnue du système !)
 vecteur_etat = zeros(temps*fe, 2); % [va ; a; b]
 vecteur_etat(:,1)=alt(1:temps*fe);
+rate_plot = rate(1:temps*fe);
+alt_plot = smoothed_alt(1:temps*fe);
+alt_plot2 = alt(1:temps*fe);
+
 vecteur_etat(:,2)=zeros(temps*fe,1);
 %vecteur_etat(:, 1) = pi * 2*pi*1*sin(2*pi*1*t(:));
 %vecteur_etat(:, 2) = -1*pi * cos(2*pi*1*t(:)) + pi;
@@ -35,7 +45,7 @@ mesure(:, 2) = zeros(temps*fe,1);%vecteur_etat(:, 2) + randn(temps*fe, 1)*bruit_
 %[b, a] = butter(1, 5/25, 'low');
 %freqz(b, a, 512, 50);
 %mesure(:, 1) = filter(b, a, mesure(:, 1));
-%mesure(:, 2) = filter(b, a, mesure(:, 2));
+%mesure(:, 2) = filter(b, a, mesure(:, 2)); 
 
 % Initialisation de Kalman
 H = [1 0; 0 0];
@@ -96,7 +106,16 @@ legend('Mesures accéléromètre', 'Angle','Estimation');
 axis square;
 xlabel('temps');ylabel('angle');
 set(figure_handle,'name',' Mesures générées');
+figure
+plot(t,rate_plot,'r');
+hold on;
+plot(t,X_svg(:,2),'b');
 
+figure
+plot(t,alt_plot,'r');
+hold on
+plot(t,alt_plot2,'g');
+plot(t,X_svg(:,1),'b');
 % subplot(1, 3, 3);hold on;
 % plot(t,vecteur_etat(:,3),'k');
 % plot(t,X_svg(:,3),'g');
