@@ -18,6 +18,7 @@
 #include "i2c_master.h"
 #include "bmp280.h"
 #include "softuart.h"
+#include "kalman.h"
 /* http://www.cs.mun.ca/~rod/Winter2007/4723/notes/serial/serial.html */
 void uart_init(void) {
     UBRR0H = UBRRH_VALUE;
@@ -88,6 +89,7 @@ void timer2_set_duration(float d_sec){
 }
 
 float altitude = 0.f;
+
 int parse_nmea(uint8_t c){
     static int i = 0;
     static int i_comma = 0;
@@ -162,16 +164,18 @@ int main(void)
 
     InitBMP280();
 
-    float alt = 0.f;
+    float alt      = 0.f;
+    float rate     = 0.f;
     const float dt = powf(2,16)*(1.f/8E6);
     float smooth_alt = 0.f;
-    float old_smooth_alt =0.f;
+
+    //float old_smooth_alt =0.f;
     //float old_smooth_alt2 =0.f;
-    float der_alt = 0.f;
-    float smooth_der_alt = 0.0f;
+    //float der_alt = 0.f;
+   // float smooth_der_alt = 0.0f;
     //float old_smooth_der_alt = 0.f;
-    const float tau_alt = 0.93f;
-    const float tau_der = 0.5f;
+//    const float tau_alt = 0.93f;
+  //  const float tau_der = 0.5f;
     float freq = 300.f;
     float const low_level = -0.5f;
     float const high_level = 0.5f;
@@ -180,8 +184,8 @@ int main(void)
     float const high_gain = 150.f;
     float const high_offset = 1100.f;
 
-    int const der_count_max = 35;
-    int der_count = 0;
+    //int const der_count_max = 35;
+    //int der_count = 0;
 
     int const prs_count_max = 120;
     int prs_count = 0;
@@ -192,9 +196,12 @@ int main(void)
     timer2_set_freq(250.f);
     timer2_set_duration(1.f);
 
-    smooth_alt = AltitudeBMP280();// Init
-    old_smooth_alt = smooth_alt;
-    alt = smooth_alt;
+    //smooth_alt = AltitudeBMP280();// Init
+    alt = AltitudeBMP280();
+    kalman_init(alt);
+    
+    //old_smooth_alt = smooth_alt;
+    //alt = smooth_alt;
 
     float time = 0.f;
 
@@ -202,22 +209,27 @@ int main(void)
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
             while( softuart_kbhit() ) {
                 c = softuart_getchar();
-                parse_nmea(c);
-                putchar(c);
+                //parse_nmea(c);
+                //putchar(c);
             }
         }
         time += dt;
         TIFR1 |= (1 << TOV1);
 
+mute = 1;
         alt = AltitudeBMP280();
-        smooth_alt = tau_alt*smooth_alt + (1.f - tau_alt)*alt;
+        kalman_predict();
+        kalman_update(alt);
+        smooth_alt = X[0];
+        rate = X[1];
+        /*smooth_alt = tau_alt*smooth_alt + (1.f - tau_alt)*alt;
         if(++der_count>=der_count_max){
             der_count = 0;
             der_alt=(smooth_alt-old_smooth_alt)/(dt*der_count_max);
             old_smooth_alt = smooth_alt;
             smooth_der_alt = tau_der*smooth_der_alt + (1-tau_der)*der_alt;
-        }
-        //printf("%f %f %f\r\n",(double)time, (double)smooth_alt,(double)smooth_der_alt);
+        }*/
+        printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)smooth_alt, (double)rate);
 
         if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
             prs_count = 0;
@@ -225,13 +237,13 @@ int main(void)
         }
 
         if(tone_done==1){
-            if(smooth_der_alt < low_level){
-                mute = 0;
-                freq = low_gain*fabs(smooth_der_alt) + low_offset;
+            if(rate < low_level){
+                //mute = 0;
+                freq = low_gain*fabs(rate) + low_offset;
             }
-            else if(smooth_der_alt > high_level){
-                mute = 0;
-                freq = smooth_der_alt * high_gain + high_offset;
+            else if(rate > high_level){
+                //mute = 0;
+                freq = rate * high_gain + high_offset;
             }
             else {
                 mute = 1;// Mute
