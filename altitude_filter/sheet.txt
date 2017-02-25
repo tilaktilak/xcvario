@@ -1,0 +1,8 @@
+Pp:matrix([pp1,pp2],[pp3,pp4]);
+H:matrix([1,0],[0,0]);
+R:matrix([sig1,0],[0,sig2]);
+(Pp*transpose(H))*invert(R+H*Pp*transpose(H));
+K:matrix([k1,k2],[k3,k4]);
+Pp - K*H*Pp;
+Xp:matrix([xp1],[xp2]);
+mes:matrix([mes1,mes2]);
