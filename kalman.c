@@ -1,20 +1,22 @@
 #include "kalman.h"
 #include <stdio.h>
+#include <avr/io.h>
+#include <stdfix.h>
 
 float measure[2] = {0.f,0.f};
 
 float H[2][2]={{1.f,0.f},
                {0.f,0.f}};
 
-float R[2][2]={{0.6f*0.6f,0.f},
+float R[2][2]={{2.f*2.f,0.f},
                {0.f      ,1.f*1.f}};
 
 float A[2][2]={{1.f    ,0.008f},
                {0.f    ,1.f }};
 
-float Q[2][2]={{0.005   ,0.f},
-               {0.f    ,1.f }};
-
+float Q[2][2]={{.2f   ,0.f},
+               {0.f    ,0.05f }};
+// Réglages cool : Q:0.2, R:1;
 
 float Pp[2][2]={{0.f},{0.f}};
 float P[2][2]={{0.f},{0.f}};

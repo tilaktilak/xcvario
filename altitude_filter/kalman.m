@@ -3,21 +3,21 @@ close all;
 clear all;
 clc;
 
-data = csvread('log4.csv');
+data = csvread('log5.csv');
 time = data(:,1);
 alt = data(:,2);
 smoothed_alt = data(:,3);
 rate = data(:,4);
 
-plot(time,alt,'b');
+plot(alt,'b');
 hold on;
-plot(time,smoothed_alt,'r');
+plot(smoothed_alt,'r');
 figure
-plot(time,rate);
-%figure
+plot(rate);
+figure
 
-fe = 125 % fréquence d'échantillonnage
-temps = 1; % temps total de mesure en seconde
+fe = 200 % fréquence d'échantillonnage
+temps = 3; % temps total de mesure en seconde
 t=(0:1/fe:temps-1/fe);
 
 % Calcul des vecteur d'états à estimer (le vecteur d'état est normalement l'inconnue du système !)
@@ -34,7 +34,7 @@ vecteur_etat(:,2)=zeros(temps*fe,1);
 
 % Bruit des capteurs (écart type)
 bruit_capteur = zeros(2);
-bruit_capteur(1) = 0.6; %+/- 0.6m
+bruit_capteur(1) = 10; %+/- 0.6m
 bruit_capteur(2) = 1;
 
 % Calcul des paramètres mesurés
@@ -52,7 +52,7 @@ H = [1 0; 0 0];
 R = [bruit_capteur(1)^2 0; 0 bruit_capteur(2)^2];
 A = [1 1/fe ;0 1];
 Q = eye(2) * 1;
-Q(1, 1) = 0.005;
+Q(1, 1) = 0.5;
 Q(2, 2) = 1;
 
 X = zeros(2, 1);
@@ -106,16 +106,16 @@ legend('Mesures accéléromètre', 'Angle','Estimation');
 axis square;
 xlabel('temps');ylabel('angle');
 set(figure_handle,'name',' Mesures générées');
-figure
-plot(t,rate_plot,'r');
-hold on;
-plot(t,X_svg(:,2),'b');
+%figure
+%plot(t,rate_plot,'r');
+%hold on;
+%plot(t,X_svg(:,2),'b');
 
-figure
-plot(t,alt_plot,'r');
-hold on
-plot(t,alt_plot2,'g');
-plot(t,X_svg(:,1),'b');
+%figure
+%plot(t,alt_plot,'r');
+%hold on
+%plot(t,alt_plot2,'g');
+%plot(t,X_svg(:,1),'b');
 % subplot(1, 3, 3);hold on;
 % plot(t,vecteur_etat(:,3),'k');
 % plot(t,X_svg(:,3),'g');

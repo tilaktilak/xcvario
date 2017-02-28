@@ -58,13 +58,14 @@ void timer1_init(void){
     TCCR1C = 0;
     TCCR1B |=(1<<CS10);//prescaler=1 
     //Enable Overflow Interrupt Enable
-    TIMSK1|=(1<<TOIE1);
+    //TIMSK1|=(1<<TOIE1);
 }
+/*
 ISR(TIMER1_OVF_vect)
 {
 time += dt;
 }
-
+*/
 void timer2_init(void){
     // TIMER 2 Config for PWM tone
     TCCR2A = (1<<WGM21) | (1<<WGM20);
@@ -211,7 +212,7 @@ int main(void)
     //old_smooth_alt = smooth_alt;
     //alt = smooth_alt;
 
-    float old_time = 0.f;
+    //float old_time = 0.f;
 
 
     for (;;) {
@@ -226,10 +227,11 @@ int main(void)
         //TIFR1 |= (1 << TOV1);
         //time += dt;
 
+        //printf("%d,%d BEFORE\r\n",(int)(time*1000), (int)(alt*100));
         alt = AltitudeBMP280();
-        kalman_predict(time-old_time);
+        kalman_predict(dt);
         kalman_update(alt);
-        old_time = time;
+        //old_time = time;
         smooth_alt = X[0];
         rate = X[1];
         /*smooth_alt = tau_alt*smooth_alt + (1.f - tau_alt)*alt;
@@ -239,7 +241,7 @@ int main(void)
             old_smooth_alt = smooth_alt;
             smooth_der_alt = tau_der*smooth_der_alt + (1-tau_der)*der_alt;
         }*/
-        printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)smooth_alt, (double)rate);
+        printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)smooth_alt,(double) rate);
 
         if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
             prs_count = 0;

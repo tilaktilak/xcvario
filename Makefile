@@ -256,7 +256,9 @@ DEBUG_HOST = localhost
 
 # Define programs and commands.
 SHELL = sh
-CC = avr-gcc
+#CC = avr-gcc
+TOOLCHAIN_PATH = /home/pierre/downloads/arduino-1.6.9/hardware/tools/avr/bin
+CC = $(TOOLCHAIN_PATH)/avr-gcc
 OBJCOPY = avr-objcopy
 OBJDUMP = avr-objdump
 SIZE = avr-size
