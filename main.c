@@ -214,6 +214,7 @@ int main(void)
 
     //float old_time = 0.f;
 
+    
 
     for (;;) {
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
@@ -225,7 +226,7 @@ int main(void)
             }
         }
         //TIFR1 |= (1 << TOV1);
-        //time += dt;
+        time += dt;
 
         //printf("%d,%d BEFORE\r\n",(int)(time*1000), (int)(alt*100));
         alt = AltitudeBMP280();
