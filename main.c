@@ -176,7 +176,7 @@ int main(void)
 
     float alt      = 0.f;
     float rate     = 0.f;
-    float smooth_alt = 0.f;
+    //float smooth_alt = 0.f;
 
     //float old_smooth_alt =0.f;
     //float old_smooth_alt2 =0.f;
@@ -233,7 +233,7 @@ int main(void)
         kalman_predict(dt);
         kalman_update(alt);
         //old_time = time;
-        smooth_alt = X[0];
+        //smooth_alt = X[0];
         rate = X[1];
         /*smooth_alt = tau_alt*smooth_alt + (1.f - tau_alt)*alt;
         if(++der_count>=der_count_max){
