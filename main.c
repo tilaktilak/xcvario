@@ -222,7 +222,7 @@ int main(void)
             while( softuart_kbhit() ) {
                 c = softuart_getchar();
                 //parse_nmea(c);
-                //putchar(c);
+                putchar(c);
             }
         }
         //TIFR1 |= (1 << TOV1);
@@ -242,11 +242,11 @@ int main(void)
             old_smooth_alt = smooth_alt;
             smooth_der_alt = tau_der*smooth_der_alt + (1-tau_der)*der_alt;
         }*/
-        printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)smooth_alt,(double) rate);
+        //printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)smooth_alt,(double) rate);
 
         if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
             prs_count = 0;
-            //printf("PRS %05x\n",(int)PressureBMP280());
+            printf("PRS %05x\n",(int)PressureBMP280());
         }
 
         if(tone_done==1){
