@@ -3,21 +3,23 @@ close all;
 clear all;
 clc;
 
-data = csvread('log5.csv');
+data = csvread('log8.csv');
 time = data(:,1);
 alt = data(:,2);
 smoothed_alt = data(:,3);
 rate = data(:,4);
 
-plot(alt,'b');
+plot(time,alt,'b');
 hold on;
-plot(smoothed_alt,'r');
+plot(time,smoothed_alt,'r');
 figure
 plot(rate);
+hold on
+plot(diff(rate)/0.08,'r');
 figure
 
-fe = 200 % fréquence d'échantillonnage
-temps = 3; % temps total de mesure en seconde
+fe = 125 % fréquence d'échantillonnage
+temps = 1; % temps total de mesure en seconde
 t=(0:1/fe:temps-1/fe);
 
 % Calcul des vecteur d'états à estimer (le vecteur d'état est normalement l'inconnue du système !)
@@ -34,8 +36,8 @@ vecteur_etat(:,2)=zeros(temps*fe,1);
 
 % Bruit des capteurs (écart type)
 bruit_capteur = zeros(2);
-bruit_capteur(1) = 10; %+/- 0.6m
-bruit_capteur(2) = 1;
+bruit_capteur(1) = 0.6; %+/- 0.6m
+bruit_capteur(2) = 0;
 
 % Calcul des paramètres mesurés
 mesure = zeros(temps*fe, 2); %[va; a]
@@ -51,9 +53,8 @@ mesure(:, 2) = zeros(temps*fe,1);%vecteur_etat(:, 2) + randn(temps*fe, 1)*bruit_
 H = [1 0; 0 0];
 R = [bruit_capteur(1)^2 0; 0 bruit_capteur(2)^2];
 A = [1 1/fe ;0 1];
-Q = eye(2) * 1;
-Q(1, 1) = 0.5;
-Q(2, 2) = 1;
+Q = [0.1 0;
+     0 1];
 
 X = zeros(2, 1);
 X(1) = alt(1);%2*pi*1;
@@ -62,7 +63,9 @@ X_svg = zeros(temps*fe, 2);
 X_svg(1, 1) = X(1);
 X_svg(1, 2) = X(2);
 P = zeros(2,2);
-P = [0 0;0 0];
+sigma_model = 1
+P = [0      0;
+     0      0];
 %P(1, 1) = 0;
 %P(2, 2) = 0;
 %P(1, 2) = 0;

@@ -69,27 +69,27 @@ b.dig_P9 =6000;*/
     return retval;
 }
 
-int32_t ReadT_BMP280(void){
-    int32_t temp;
+uint32_t ReadT_BMP280(void){
+    uint32_t temp;
     uint8_t buf[3];
     i2c_readReg(BMP_ADDR,REG_TEMP_MSB,  (uint8_t*)&buf,3);
     temp = buf[0];
     temp = temp << 8;
-    temp += buf[1];
+    temp |= buf[1];
     temp = temp<<4;
-    temp += buf[2]>>4;
+    temp |= buf[2]>>4;
     return temp;
 }
 
-int32_t ReadP_BMP280(void){
-    int32_t pres;
+uint32_t ReadP_BMP280(void){
+    uint32_t pres;
     uint8_t buf[3];
     i2c_readReg(BMP_ADDR,REG_PRES_MSB,buf,3);
     pres = buf[0];
     pres = pres << 8;
-    pres += buf[1];
+    pres |= buf[1];
     pres = pres<<4;
-    pres += buf[2]>>4;
+    pres |= buf[2]>>4;
     return pres;
 }
 
@@ -98,7 +98,7 @@ int32_t ReadP_BMP280(void){
 float TemperatureBMP280(void){
   int32_t var1, var2;
 
-  int32_t adc_T = ReadT_BMP280();
+  uint32_t adc_T = ReadT_BMP280();
 
   var1  = ((((adc_T>>3) - ((int32_t)b.dig_T1 <<1))) *
 	   ((int32_t)b.dig_T2)) >> 11;
@@ -113,13 +113,14 @@ float TemperatureBMP280(void){
   return T/100;
 }
 float test1;
+
 float PressureBMP280(void) {
   int64_t var1, var2, p;
 
   // Must be done first to get the t_fine variable set up
   TemperatureBMP280();
 
-  int32_t adc_P = ReadP_BMP280();
+  uint32_t adc_P = ReadP_BMP280();
 
   var1 = ((int64_t)t_fine) - 128000;
   var2 = var1 * var1 * (int64_t)b.dig_P6;

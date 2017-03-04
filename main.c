@@ -196,7 +196,7 @@ int main(void)
     //int const der_count_max = 35;
     //int der_count = 0;
 
-    int const prs_count_max = 120;
+    int const prs_count_max = 1;
     int prs_count = 0;
 
     timer1_init();
@@ -225,10 +225,10 @@ int main(void)
                 putchar(c);
             }
         }
-        //TIFR1 |= (1 << TOV1);
+        TIFR1 |= (1 << TOV1);
         time += dt;
 
-        //printf("%d,%d BEFORE\r\n",(int)(time*1000), (int)(alt*100));
+        // printf("%d,%d BEFORE\r\n",(int)(time*1000), (int)(alt*100));
         alt = AltitudeBMP280();
         kalman_predict(dt);
         kalman_update(alt);
@@ -246,7 +246,8 @@ int main(void)
 
         if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
             prs_count = 0;
-            printf("PRS %05x\n",(int)PressureBMP280());
+            //printf("PRS %05x\r\n",(int)PressureBMP280());
+            printf("PRS %05x\r\n",(int)PressureBMP280());
         }
 
         if(tone_done==1){
