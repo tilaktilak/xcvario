@@ -57,15 +57,8 @@ void timer1_init(void){
     TCCR1B = 0;
     TCCR1C = 0;
     TCCR1B |=(1<<CS10);//prescaler=1 
-    //Enable Overflow Interrupt Enable
-    //TIMSK1|=(1<<TOIE1);
 }
-/*
-ISR(TIMER1_OVF_vect)
-{
-time += dt;
-}
-*/
+
 void timer2_init(void){
     // TIMER 2 Config for PWM tone
     TCCR2A = (1<<WGM21) | (1<<WGM20);
@@ -191,7 +184,7 @@ int main(void)
     float rate     = 0.f;
 
     float freq = 300.f;
-    float const low_level = -0.5f;
+    float const low_level = -0.7f;
     float const high_level = 0.5f;
     float const low_gain = -50.f;
     float const low_offset = 300.f;
@@ -206,17 +199,19 @@ int main(void)
     timer2_init();
     timer2_set_freq(250.f);
     timer2_set_duration(1.f);
-    timer2_set_volume(20.f);
+    timer2_set_volume(0.f);
 
     alt = AltitudeBMP280();
     kalman_init(alt);
-    
+
     for (;;) {
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
             while( softuart_kbhit() ) {
                 c = softuart_getchar();
-                //putchar(c);
+                putchar(c);
             }
+                
+
         }
         TIFR1 |= (1 << TOV1);
         time += dt;
@@ -225,15 +220,14 @@ int main(void)
         kalman_predict(dt);
         kalman_update(alt);
         rate = X[1];
-        //printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)X[1],(double) rate);
+        //printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)X[0],(double) rate);
         //printf("B:%u - A:%u\r\n",(unsigned int)b_int,(unsigned int)a_int); 
 
         if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
             prs_count = 0;
-            //printf("PRS %05x\r\n",(int)PressureBMP280());
+            printf("PRS %05x\r\n",(int)PressureBMP280());
         }
 
-        rate = 1.f;
         if(tone_done==1){
             if(rate < low_level){
                 mute = 0;
@@ -251,7 +245,7 @@ int main(void)
 
             timer2_set_freq(freq);
             timer2_set_duration(500.f/freq);
-            timer2_set_volume(20.f);
+            timer2_set_volume(1.f);
             tone_done = 0;
         }
 
