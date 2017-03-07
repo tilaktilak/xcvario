@@ -11,7 +11,7 @@
 #endif
 
 #ifndef BAUD
-#define BAUD 9600
+#define BAUD 38400
 #endif
 #include <util/setbaud.h>
 
@@ -166,7 +166,6 @@ uint32_t b_int, a_int;
 
 int main(void)
 {
-    char c = ' ';
 
     uart_init();
     softuart_init();
@@ -191,8 +190,10 @@ int main(void)
     float const high_gain = 150.f;
     float const high_offset = 1100.f;
 
-    int const prs_count_max = 5;
+    
+    long int const prs_count_max = 10000;
     int prs_count = 0;
+    
 
     timer1_init();
 
@@ -203,16 +204,21 @@ int main(void)
 
     alt = AltitudeBMP280();
     kalman_init(alt);
+    char c = ' ';
 
     for (;;) {
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
+            
             while( softuart_kbhit() ) {
                 c = softuart_getchar();
-                putchar(c);
+                //putchar(c);
             }
-                
 
-        }
+            if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
+                prs_count = 0;
+                //printf("PRS %05x\r\n",(int)PressureBMP280());
+            }
+                     }
         TIFR1 |= (1 << TOV1);
         time += dt;
 
@@ -220,13 +226,9 @@ int main(void)
         kalman_predict(dt);
         kalman_update(alt);
         rate = X[1];
-        //printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)X[0],(double) rate);
+        printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)X[0],(double) rate);
         //printf("B:%u - A:%u\r\n",(unsigned int)b_int,(unsigned int)a_int); 
 
-        if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
-            prs_count = 0;
-            printf("PRS %05x\r\n",(int)PressureBMP280());
-        }
 
         if(tone_done==1){
             if(rate < low_level){

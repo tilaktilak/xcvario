@@ -75,9 +75,9 @@ uint32_t ReadT_BMP280(void){
     i2c_readReg(BMP_ADDR,REG_TEMP_MSB,  (uint8_t*)&buf,3);
     temp = buf[0];
     temp = temp << 8;
-    temp |= buf[1];
+    temp += buf[1];
     temp = temp<<4;
-    temp |= buf[2]>>4;
+    temp += buf[2]>>4;
     return temp;
 }
 
@@ -87,9 +87,9 @@ uint32_t ReadP_BMP280(void){
     i2c_readReg(BMP_ADDR,REG_PRES_MSB,buf,3);
     pres = buf[0];
     pres = pres << 8;
-    pres |= buf[1];
+    pres += buf[1];
     pres = pres<<4;
-    pres |= buf[2]>>4;
+    pres += buf[2]>>4;
     return pres;
 }
 
