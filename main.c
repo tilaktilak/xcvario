@@ -32,7 +32,50 @@ void uart_init(void) {
 
     UCSR0C = _BV(UCSZ01) | _BV(UCSZ00); /* 8-bit data */ 
     UCSR0B = _BV(RXEN0) | _BV(TXEN0);   /* Enable RX and TX */    
+    UCSR0C |= _BV(RXCIE0);
 }
+
+uint8_t flag_volume_recv = 0;
+uint8_t buf[12]={0};
+
+ISR(USART_RX_vect){
+    uint8_t data = UDR0;
+    static uint8_t count = 0;
+    if(count == 0){
+        if(data == '$'){
+            buf[count++]=data;
+        }
+        else{count = 0;}
+    }
+    else if(count == 1){
+        if(data == 'B'){
+            buf[count++]=data;
+        }
+        else{count = 0;}
+    }
+    else if(count == 2){
+        if(data == 'V'){
+            buf[count++]=data;
+        }
+        else{count = 0;}
+    }
+    else if(count == 3){
+        if(data == ' '){
+            buf[count++]=data;
+        }
+        else{count = 0;}
+    }
+    else if(count >3){
+        if(data == '*'){
+            // END !
+            flag_volume_recv = 1;
+            count = 0;
+        }
+    }
+    else{
+        count = 0;
+    }
+}   
 
 int uart_putchar(char c, FILE *stream) {
     loop_until_bit_is_set(UCSR0A, UDRE0);
@@ -62,12 +105,13 @@ void timer1_init(void){
 void timer2_init(void){
     // TIMER 2 Config for PWM tone
     TCCR2A = (1<<WGM21) | (1<<WGM20);
-    TCCR2B = (0<<CS20) | (1<<CS21) | (1<<CS22) |(1<<WGM22);
+    TCCR2B = (1<<CS20) | (0<<CS21) | (1<<CS22) |(1<<WGM22);
     //TCCR2B = (0<<CS21);
     OCR2A = 0x00;
-    OCR2B = 0x00;
+    //OCR2B = 0x00;
     TIMSK2 = (1<<OCIE2A);
-    TIMSK2 |= (1<<OCIE2B);
+    //TIMSK2 |= (1<<OCIE2B);
+
 
     // Init A3 pin (PC3)
     DDRC |= (1<<DDC3);
@@ -97,7 +141,7 @@ void timer2_set_duration(float d_sec){
 void timer2_set_volume(float volume){
     cli();
     OCR2B = (uint8_t)((OCR2A/2)*(volume/100.f));// Pourcent of OCR2A
-    
+
     sei();
 }
 
@@ -162,7 +206,6 @@ int parse_nmea(uint8_t c){
 
 volatile uint8_t tone_done = 0;
 
-uint32_t b_int, a_int;
 
 int main(void)
 {
@@ -190,17 +233,17 @@ int main(void)
     float const high_gain = 150.f;
     float const high_offset = 1100.f;
 
-    
+
     long int const prs_count_max = 10000;
     int prs_count = 0;
-    
+
 
     timer1_init();
 
     timer2_init();
     timer2_set_freq(250.f);
     timer2_set_duration(1.f);
-    timer2_set_volume(0.f);
+    //timer2_set_volume(0.f);
 
     alt = AltitudeBMP280();
     kalman_init(alt);
@@ -208,17 +251,22 @@ int main(void)
 
     for (;;) {
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
-            
+
             while( softuart_kbhit() ) {
                 c = softuart_getchar();
-                //putchar(c);
+                putchar(c);
             }
 
             if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
                 prs_count = 0;
-                //printf("PRS %05x\r\n",(int)PressureBMP280());
+                uint32_t inttp = (uint32_t)PressureBMP280();
+                printf("PRS %05lx\r\n",(unsigned long int)inttp);
             }
-                     }
+            if(flag_volume_recv){
+                // SNPRINTF to get volume
+
+            }
+        }
         TIFR1 |= (1 << TOV1);
         time += dt;
 
@@ -226,7 +274,7 @@ int main(void)
         kalman_predict(dt);
         kalman_update(alt);
         rate = X[1];
-        printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)X[0],(double) rate);
+        //printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)X[0],(double) rate);
         //printf("B:%u - A:%u\r\n",(unsigned int)b_int,(unsigned int)a_int); 
 
 
@@ -247,7 +295,7 @@ int main(void)
 
             timer2_set_freq(freq);
             timer2_set_duration(500.f/freq);
-            timer2_set_volume(1.f);
+            //timer2_set_volume(10.f);
             tone_done = 0;
         }
 
@@ -272,10 +320,9 @@ void toggle_PC3(void){
 }
 
 ISR(TIMER2_COMPA_vect){
-    a_int++;
     if(state == 0){// Noisy half period
-        //toggle_PC3();
-        if(!mute) PORTC |= (1<<PORTC3);
+        toggle_PC3();
+        //if(!mute) PORTC |= (1<<PORTC3);
         if((--tim2_period)<=0) state = 1;
     }
     if(state == 1){// Mute half period
@@ -286,10 +333,10 @@ ISR(TIMER2_COMPA_vect){
     }
 }
 
-ISR(TIMER2_COMPB_vect){
-    if(state == 0){
-        if(!mute)PORTC &=(0<<PORTC3);
-    }
+/*ISR(TIMER2_COMPB_vect){
+  if(state == 0){
+// if(!mute)PORTC &=(0<<PORTC3);
 }
+}*/
 
 
