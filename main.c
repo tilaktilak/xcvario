@@ -92,7 +92,7 @@ FILE uart_output = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
 #define TIMER_FREQ_HZ   1
 
 //const float dt = powf(2,16)*(1.f/8E6);
-const float dt = 0.008f;
+const float dt = 0.010f;
 float time = 0.f;
 void timer1_init(void){
     // TIMER 1 Config for timing while 1
@@ -105,11 +105,11 @@ void timer1_init(void){
 void timer2_init(void){
     // TIMER 2 Config for PWM tone
     TCCR2A = (1<<WGM21) | (1<<WGM20);
-    TCCR2B = (0<<CS20) | (1<<CS21) | (1<<CS22) |(1<<WGM22);
+    TCCR2B = (1<<CS20) | (0<<CS21) | (1<<CS22) |(1<<WGM22);
     OCR2A = 0x00;
-    OCR2B = 0x00;
+    //OCR2B = 0x00;
     TIMSK2 = (1<<OCIE2A);
-    TIMSK2 |= (1<<OCIE2B);
+    //TIMSK2 |= (1<<OCIE2B);
 
 
     // Init A3 pin (PC3)
@@ -225,7 +225,7 @@ int main(void)
     float rate     = 0.f;
 
     float freq = 300.f;
-    float const low_level = -0.3f;
+    float const low_level = -1.f;
     float const high_level = 0.3f;
     float const low_gain = -50.f;
     float const low_offset = 300.f;
@@ -242,7 +242,7 @@ int main(void)
     timer2_init();
     timer2_set_freq(250.f);
     timer2_set_duration(1.f);
-    timer2_set_volume(0.f);
+    //timer2_set_volume(0.f);
 
     alt = AltitudeBMP280();
     kalman_init(alt);
@@ -263,6 +263,7 @@ int main(void)
             }
             if(flag_volume_recv){
                 // SNPRINTF to get volume
+                flag_volume_recv = 0;
 
             }
         }
@@ -294,7 +295,7 @@ int main(void)
 
             timer2_set_freq(freq);
             timer2_set_duration(500.f/freq);
-            timer2_set_volume(10.f);
+            //timer2_set_volume(10.f);
             tone_done = 0;
         }
 
@@ -320,8 +321,8 @@ void toggle_PC3(void){
 
 ISR(TIMER2_COMPA_vect){
     if(state == 0){// Noisy half period
-        //toggle_PC3();
-        if(!mute) PORTC |= (1<<PORTC3);
+        toggle_PC3();
+        //if(!mute) PORTC |= (1<<PORTC3);
         if((--tim2_period)<=0) state = 1;
     }
     if(state == 1){// Mute half period
@@ -331,9 +332,9 @@ ISR(TIMER2_COMPA_vect){
         }
     }
 }
-
+/*
 ISR(TIMER2_COMPB_vect){
     if(state == 0){
         if(!mute)PORTC &=(0<<PORTC3);
     }
-}
+}*/
