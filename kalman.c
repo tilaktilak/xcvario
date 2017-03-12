@@ -3,42 +3,42 @@
 #include <avr/io.h>
 #include <stdfix.h>
 
-float measure[2] = {0.f,0.f};
+_Accum measure[2] = {0.f,0.f};
 
-float H[2][2]={{1.f,0.f},
+_Accum H[2][2]={{1.f,0.f},
                {0.f,0.f}};
 
-float R[2][2]={{2.f*2.f,0.f},
+_Accum R[2][2]={{2.f*2.f,0.f},
                {0.f      ,0.f}};
 
-float A[2][2]={{1.f    ,0.008f},
+_Accum A[2][2]={{1.f    ,0.008f},
                {0.f    ,1.f }};
 
-float Q[2][2]={{0.f   ,0.f},
+_Accum Q[2][2]={{0.f   ,0.f},
                {0.f    ,1.f }};
-//float Q[2][2]={{.3f   ,0.f},
+//_Accum Q[2][2]={{.3f   ,0.f},
 //               {0.f    ,0.05f }};
 // Réglages cool : Q:0.2, R:1;
 
-float Pp[2][2]={{0.f},{0.f}};
-float P[2][2]={{0.f},{0.f}};
-float K[2][2]={{0.f},{0.f}};
-float Xp[2]={0.f};
+_Accum Pp[2][2]={{0.f},{0.f}};
+_Accum P[2][2]={{0.f},{0.f}};
+_Accum K[2][2]={{0.f},{0.f}};
+_Accum Xp[2]={0.f};
 
-float X[2];
-int kalman_init(float altitude_init){
+_Accum X[2];
+int kalman_init(_Accum altitude_init){
     X[0] = altitude_init;
     X[1] = 0.f;
     return 0;
 
 }
 
-/*int kalman_update(float *Pp,
-  float *H,
-  float *R,
-  float *Xp){
+/*int kalman_update(_Accum *Pp,
+  _Accum *H,
+  _Accum *R,
+  _Accum *Xp){
  */
-int kalman_update(float alt){
+int kalman_update(_Accum alt){
 /*
 alt = 73.4156f;
 
@@ -107,12 +107,13 @@ printf("%f %f\r\n %f %f\r\n",K[0][0],
     return 0;
 }
 
-/*int kalman_predit(float *P,
-                  float *A,
-                  float *Q,
-                  float *X){
+/*
+int kalman_predit(_Accum *P,
+                  _Accum *A,
+                  _Accum *Q,
+                  _Accum *X){
                   */
-int kalman_predict(float dt){
+int kalman_predict(_Accum dt){
 //X[0] = 73.5231f;
 //X[1] = 0.0006f;
 

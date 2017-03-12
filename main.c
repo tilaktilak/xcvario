@@ -91,15 +91,18 @@ FILE uart_output = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
 
 #define TIMER_FREQ_HZ   1
 
-//const float dt = powf(2,16)*(1.f/8E6);
-const float dt = 0.010f;
-float time = 0.f;
+//const _Accum dt = powf(2,16)*(1.f/8E6);
+_Accum dt = 0.0f;
+// Count until 8192
+_Accum time = 0.f;
 void timer1_init(void){
     // TIMER 1 Config for timing while 1
     TCCR1A = 0;
     TCCR1B = 0;
     TCCR1C = 0;
-    TCCR1B |=(1<<CS10);//prescaler=1 
+    TCCR1B |=(1<<CS10) ;//| (1<<CS11);//prescaler=8
+    //OCR1AL = 0b00000000;
+    //OCR1AH = 0b00100000;
 }
 
 void timer2_init(void){
@@ -117,7 +120,7 @@ void timer2_init(void){
     PORTC &= ~(1<<PORTC3);
 }
 // Fmin = 250Hz
-void timer2_set_freq(float freq){
+void timer2_set_freq(_Accum freq){
     cli();
     OCR2A = (uint8_t)((1./freq)*8E6/128.f);
     // PERIOD = 1s -> 8E6/128f
@@ -130,21 +133,21 @@ volatile int32_t tim2_period = 0;
 volatile uint8_t mute = 0;
 volatile uint8_t state = 0;
 
-void timer2_set_duration(float d_sec){
+void timer2_set_duration(_Accum d_sec){
     cli();
-    duration = (int)(d_sec/2.f*(8E6/128.f)/(float)OCR2A);
+    duration = (int)(d_sec/2.f*(8E6/128.f)/(_Accum)OCR2A);
     tim2_period = duration;//Launch new period
     sei();
 }
 
-void timer2_set_volume(float volume){
+void timer2_set_volume(_Accum volume){
     cli();
     OCR2B = (uint8_t)((OCR2A/2)*(volume/100.f));// Pourcent of OCR2A
 
     sei();
 }
 
-float altitude = 0.f;
+_Accum altitude = 0.f;
 
 int parse_nmea(uint8_t c){
     static int i = 0;
@@ -221,16 +224,18 @@ int main(void)
 
     InitBMP280();
 
-    float alt      = 0.f;
-    float rate     = 0.f;
+    _Accum alt      = 0.f;
+    _Accum rate     = 0.f;
+    //_Accum ralt     = 0.f;
+    //_Accum old_alt  = 0.f;
 
-    float freq = 300.f;
-    float const low_level = -1.f;
-    float const high_level = 0.3f;
-    float const low_gain = -50.f;
-    float const low_offset = 300.f;
-    float const high_gain = 150.f;
-    float const high_offset = 1100.f;
+    _Accum freq = 300.f;
+    _Accum const low_level = -0.3f;
+    _Accum const high_level = 0.2f;
+    _Accum const low_gain = -50.f;
+    _Accum const low_offset = 300.f;
+    _Accum const high_gain = 150.f;
+    _Accum const high_offset = 1100.f;
 
 
     long int const prs_count_max = 10000;
@@ -248,8 +253,13 @@ int main(void)
     kalman_init(alt);
     char c = ' ';
 
+    //uint16_t count_dt = 0;
+
     for (;;) {
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
+        //count_dt = TCNT1L;
+        //count_dt |= TCNT1H<<8;
+        //while(count_dt < 8192){
 
             while( softuart_kbhit() ) {
                 c = softuart_getchar();
@@ -261,20 +271,26 @@ int main(void)
                 uint32_t inttp = (uint32_t)PressureBMP280();
                 printf("PRS %05lx\r\n",(unsigned long int)inttp);
             }
+            /*
             if(flag_volume_recv){
                 // SNPRINTF to get volume
                 flag_volume_recv = 0;
 
-            }
+            }*/
+               /*
+            count_dt = TCNT1L;
+            count_dt |= TCNT1H<<8;*/
         }
+        //dt = count_dt* (1/1E6);
         TIFR1 |= (1 << TOV1);
         time += dt;
 
         alt = AltitudeBMP280();
-        kalman_predict(dt);
+        kalman_predict(0.01f);
         kalman_update(alt);
+        //rate = 0.7*rate + 0.3*X[1];
         rate = X[1];
-        //printf("%f,%f,%f,%f\r\n",(double)time, (double)alt,(double)X[0],(double) rate);
+        //printf("%f,%f,%f,%f\r\n",(double)time, (double)X[0],(double)alt,(double) rate);
         //printf("B:%u - A:%u\r\n",(unsigned int)b_int,(unsigned int)a_int); 
 
 
