@@ -3,7 +3,7 @@ close all;
 clear all;
 clc;
 
-data = csvread('log8.csv');
+data = csvread('log11.csv');
 time = data(:,1);
 alt = data(:,2);
 smoothed_alt = data(:,3);
@@ -15,7 +15,7 @@ plot(time,smoothed_alt,'r');
 figure
 plot(rate);
 hold on
-plot(diff(rate)/0.08,'r');
+%plot(diff(rate)/0.08,'r');
 figure
 
 fe = 125 % fréquence d'échantillonnage

@@ -146,7 +146,7 @@ float PressureBMP280(void) {
 
 
 float AltitudeBMP280(void){
-    float press = PressureBMP280();
+    press = PressureBMP280();
     float alt = 0.f;;
     alt = (1.f - powf(((float)press)/101325.f,0.190284f))*145366.45f;
     alt = alt * 0.3048f;

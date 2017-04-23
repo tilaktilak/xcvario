@@ -9,6 +9,8 @@ float AltitudeBMP280(void);
 
 float PressureBMP280(void);
 
+float press;
+
 int32_t t_fine;
 union {
     struct {
