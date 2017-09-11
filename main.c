@@ -95,6 +95,9 @@ FILE uart_output = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
 _Accum dt = 0.0f;
 // Count until 8192
 _Accum time = 0.f;
+
+volatile long millis;
+
 void timer1_init(void){
     // TIMER 1 Config for timing while 1
     TCCR1A = 0;
@@ -343,7 +346,16 @@ void toggle_PC3(void){
     }
 }
 
+// Time counter will be in Timer2 IRQ A
+// It's called every 16us ( 8Mhz / 128 presc)
+// If we want to convert it to ms, just do a
+// scale constant multiplier
+//
+// To insure no overflow, maybe restart counter 
+// every time data is used (use it as a dt value)
+//
 ISR(TIMER2_COMPA_vect){
+	millis++;
     if(state == 0){// Noisy half period
         toggle_PC3();
         //if(!mute) PORTC |= (1<<PORTC3);
@@ -356,6 +368,7 @@ ISR(TIMER2_COMPA_vect){
         }
     }
 }
+
 /*
 ISR(TIMER2_COMPB_vect){
     if(state == 0){
