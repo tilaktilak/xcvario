@@ -2,6 +2,8 @@
 
 Interface board to transform a KOBO in an XCSoar glide computer
 
+This project uses [XCSoar](https://github.com/XCSoar) : An opensource gliding computer
+
 
 [![DSC00004.jpg](https://i.postimg.cc/hvsq8fkh/DSC00004.jpg)](https://postimg.cc/5QXGbNNM)
 
