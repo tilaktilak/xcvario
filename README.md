@@ -1,5 +1,3 @@
-# XCVARIO
-
 ##  Subject
 
 Interface board to transform a KOBO in an XCSoar glide computer
