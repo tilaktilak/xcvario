@@ -150,8 +150,8 @@ V0.4 (10/2010)
 // startbit and stopbit parsed internally (see ISR)
 #define RX_NUM_OF_BITS (8)
 volatile static char           inbuf[SOFTUART_IN_BUF_SIZE];
-volatile static unsigned char  qin;
-static unsigned char           qout;
+volatile unsigned char  qin;
+volatile unsigned char           qout;
 volatile static unsigned char  flag_rx_off;
 volatile static unsigned char  flag_rx_ready;
 
@@ -204,6 +204,9 @@ ISR(SOFTUART_T_COMP_LABEL)
 				flag_rx_waiting_for_stop_bit = SU_FALSE;
 				flag_rx_ready = SU_FALSE;
 				inbuf[qin] = internal_rx_buffer;
+				if(internal_rx_buffer == '\n'){
+					new_nmea_line = 1;
+				}
 				if ( ++qin >= SOFTUART_IN_BUF_SIZE ) {
 					// overflow - reset inbuf-index
 					qin = 0;
@@ -301,10 +304,11 @@ void softuart_turn_rx_off( void )
 char softuart_getchar( void )
 {
 	char ch;
+	(void)idle;
 
-	while ( qout == qin ) {
-		idle();
-	}
+	//while ( qout == qin ) {
+	//	idle();
+	//}
 	ch = inbuf[qout];
 	if ( ++qout >= SOFTUART_IN_BUF_SIZE ) {
 		qout = 0;

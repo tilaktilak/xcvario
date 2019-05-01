@@ -1,0 +1,1059 @@
+   1               		.file	"softuart.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   7               		.text
+   8               	.Ltext0:
+   9               		.cfi_sections	.debug_frame
+  10               	.global	__vector_14
+  12               	__vector_14:
+  13               	.LFB1:
+  14               		.file 1 "softuart.c"
+   1:softuart.c    **** // softuart.c
+   2:softuart.c    **** // AVR-port of the generic software uart written in C
+   3:softuart.c    **** //
+   4:softuart.c    **** // Generic code from
+   5:softuart.c    **** // Colin Gittins, Software Engineer, Halliburton Energy Services
+   6:softuart.c    **** // (has been available from iar.com web-site -> application notes)
+   7:softuart.c    **** //
+   8:softuart.c    **** // Adapted to AVR using avr-gcc and avr-libc
+   9:softuart.c    **** // by Martin Thomas, Kaiserslautern, Germany
+  10:softuart.c    **** // <eversmith@heizung-thomas.de> 
+  11:softuart.c    **** // http://www.siwawi.arubi.uni-kl.de/avr_projects
+  12:softuart.c    **** //
+  13:softuart.c    **** // AVR-port Version 0.4  10/2010
+  14:softuart.c    **** //
+  15:softuart.c    **** // ---------------------------------------------------------------------
+  16:softuart.c    **** //
+  17:softuart.c    **** // Remarks from Colin Gittins:
+  18:softuart.c    **** //
+  19:softuart.c    **** // Generic software uart written in C, requiring a timer set to 3 times
+  20:softuart.c    **** // the baud rate, and two software read/write pins for the receive and
+  21:softuart.c    **** // transmit functions.
+  22:softuart.c    **** //
+  23:softuart.c    **** // * Received characters are buffered
+  24:softuart.c    **** // * putchar(), getchar(), kbhit() and flush_input_buffer() are available
+  25:softuart.c    **** // * There is a facility for background processing while waiting for input
+  26:softuart.c    **** // The baud rate can be configured by changing the BAUD_RATE macro as
+  27:softuart.c    **** // follows:
+  28:softuart.c    **** //
+  29:softuart.c    **** // #define BAUD_RATE  19200.0
+  30:softuart.c    **** //
+  31:softuart.c    **** // The function init_uart() must be called before any comms can take place
+  32:softuart.c    **** //
+  33:softuart.c    **** // Interface routines required:
+  34:softuart.c    **** // 1. get_rx_pin_status()
+  35:softuart.c    **** //    Returns 0 or 1 dependent on whether the receive pin is high or low.
+  36:softuart.c    **** // 2. set_tx_pin_high()
+  37:softuart.c    **** //    Sets the transmit pin to the high state.
+  38:softuart.c    **** // 3. set_tx_pin_low()
+  39:softuart.c    **** //    Sets the transmit pin to the low state.
+  40:softuart.c    **** // 4. idle()
+  41:softuart.c    **** //    Background functions to execute while waiting for input.
+  42:softuart.c    **** // 5. timer_set( BAUD_RATE )
+  43:softuart.c    **** //    Sets the timer to 3 times the baud rate.
+  44:softuart.c    **** // 6. set_timer_interrupt( timer_isr )
+  45:softuart.c    **** //    Enables the timer interrupt.
+  46:softuart.c    **** //
+  47:softuart.c    **** // Functions provided:
+  48:softuart.c    **** // 1. void flush_input_buffer( void )
+  49:softuart.c    **** //    Clears the contents of the input buffer.
+  50:softuart.c    **** // 2. char kbhit( void )
+  51:softuart.c    **** //    Tests whether an input character has been received.
+  52:softuart.c    **** // 3. char getchar( void )
+  53:softuart.c    **** //    Reads a character from the input buffer, waiting if necessary.
+  54:softuart.c    **** // 4. void turn_rx_on( void )
+  55:softuart.c    **** //    Turns on the receive function.
+  56:softuart.c    **** // 5. void turn_rx_off( void )
+  57:softuart.c    **** //    Turns off the receive function.
+  58:softuart.c    **** // 6. void putchar( char )
+  59:softuart.c    **** //    Writes a character to the serial port.
+  60:softuart.c    **** //
+  61:softuart.c    **** // ---------------------------------------------------------------------
+  62:softuart.c    **** 
+  63:softuart.c    **** /* 
+  64:softuart.c    **** Remarks by Martin Thomas (avr-gcc/avr-libc):
+  65:softuart.c    **** V0.1 (2/2005)
+  66:softuart.c    **** - stdio.h not used
+  67:softuart.c    **** - AVR-Timer in CTC-Mode ("manual" reload may not be accurate enough)
+  68:softuart.c    **** - Global Interrupt Flag has to be enabled (see demo-application)
+  69:softuart.c    **** - Interface timer_set and set_timer_interrupt not used here
+  70:softuart.c    **** - internal_tx_buffer was defined as unsigned char - thas could not
+  71:softuart.c    ****   work since more than 8 bits are needed, changed to unsigned short
+  72:softuart.c    **** - some variables moved from "global scope" into ISR function-scope
+  73:softuart.c    **** - GPIO initialisation included
+  74:softuart.c    **** - Added functions for string-output inspired by P. Fleury's AVR UART-lib.
+  75:softuart.c    **** V0.2 (3/2007)
+  76:softuart.c    **** - adjusted number of RX-bits
+  77:softuart.c    **** - adapted to avr-libc ISR-macro (replaces SIGNAL)
+  78:softuart.c    **** - disable interrupts during timer-init
+  79:softuart.c    **** - used unsigned char (uint8_t) where apropriate
+  80:softuart.c    **** - removed "magic" char checking (0xc2)
+  81:softuart.c    **** - added softuart_can_transmit()
+  82:softuart.c    **** - Makefile based on template from WinAVR 1/2007
+  83:softuart.c    **** - reformated
+  84:softuart.c    **** - extended demo-application to show various methods to 
+  85:softuart.c    ****   send a string from flash and RAM
+  86:softuart.c    **** - demonstrate usage of avr-libc's stdio in demo-applcation
+  87:softuart.c    **** - tested with ATmega644 @ 3,6864MHz system-clock using
+  88:softuart.c    ****   avr-gcc 4.1.1/avr-libc 1.4.5 (WinAVR 1/2007)
+  89:softuart.c    **** V0.3 (4/2007)
+  90:softuart.c    **** - better configuration options in softuart.h.
+  91:softuart.c    ****   ->should be easier to adapt to different AVRs
+  92:softuart.c    **** - tested with ATtiny85 @ 1MHz (internal RC) with 2400bps
+  93:softuart.c    **** - AVR-Studio Project-File
+  94:softuart.c    **** V0.4 (10/2010)
+  95:softuart.c    **** - added options for ATmega164P, ATmega32P, ATmega64P
+  96:softuart.c    **** - changed some variable-types from char to unsigned char
+  97:softuart.c    **** - changed some comparisons from <= to ==
+  98:softuart.c    **** - small optimization in ISR for RX with temporary variable
+  99:softuart.c    **** - minor modifications in comments and formating
+ 100:softuart.c    **** - added compiler options -fno-inline-small-functions, -Wl,--relax
+ 101:softuart.c    **** - renamed flag_tx_ready to flag_tx_busy
+ 102:softuart.c    **** - replaced softuart_can_transmit() by softuart_transmit_busy()
+ 103:softuart.c    **** - tested with ATmega324PV @ 1MHz internal RC and 2400bps
+ 104:softuart.c    ****   (options for ATtiny25/45/85 still available)
+ 105:softuart.c    **** - added 3BSD license
+ 106:softuart.c    **** - removed redundant zero-init in declaration of qin and qout
+ 107:softuart.c    **** */
+ 108:softuart.c    **** 
+ 109:softuart.c    **** /* Copyright (c) 2003, Colin Gittins
+ 110:softuart.c    ****    Copyright (c) 2005, 2007, 2010, Martin Thomas
+ 111:softuart.c    ****    All rights reserved.
+ 112:softuart.c    **** 
+ 113:softuart.c    ****    Redistribution and use in source and binary forms, with or without
+ 114:softuart.c    ****    modification, are permitted provided that the following conditions are met:
+ 115:softuart.c    **** 
+ 116:softuart.c    ****    * Redistributions of source code must retain the above copyright
+ 117:softuart.c    ****      notice, this list of conditions and the following disclaimer.
+ 118:softuart.c    **** 
+ 119:softuart.c    ****    * Redistributions in binary form must reproduce the above copyright
+ 120:softuart.c    ****      notice, this list of conditions and the following disclaimer in
+ 121:softuart.c    ****      the documentation and/or other materials provided with the
+ 122:softuart.c    ****      distribution.
+ 123:softuart.c    **** 
+ 124:softuart.c    ****    * Neither the name of the copyright holders nor the names of
+ 125:softuart.c    ****      contributors may be used to endorse or promote products derived
+ 126:softuart.c    ****      from this software without specific prior written permission.
+ 127:softuart.c    **** 
+ 128:softuart.c    ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ 129:softuart.c    ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ 130:softuart.c    ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ 131:softuart.c    ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ 132:softuart.c    ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ 133:softuart.c    ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ 134:softuart.c    ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ 135:softuart.c    ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ 136:softuart.c    ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ 137:softuart.c    ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ 138:softuart.c    ****   POSSIBILITY OF SUCH DAMAGE. */
+ 139:softuart.c    **** 
+ 140:softuart.c    **** 
+ 141:softuart.c    **** #include <avr/io.h>
+ 142:softuart.c    **** #include <avr/interrupt.h>
+ 143:softuart.c    **** #include <avr/pgmspace.h>
+ 144:softuart.c    **** 
+ 145:softuart.c    **** #include "softuart.h"
+ 146:softuart.c    **** 
+ 147:softuart.c    **** #define SU_TRUE    1
+ 148:softuart.c    **** #define SU_FALSE   0
+ 149:softuart.c    **** 
+ 150:softuart.c    **** // startbit and stopbit parsed internally (see ISR)
+ 151:softuart.c    **** #define RX_NUM_OF_BITS (8)
+ 152:softuart.c    **** volatile static char           inbuf[SOFTUART_IN_BUF_SIZE];
+ 153:softuart.c    **** volatile unsigned char  qin;
+ 154:softuart.c    **** volatile unsigned char           qout;
+ 155:softuart.c    **** volatile static unsigned char  flag_rx_off;
+ 156:softuart.c    **** volatile static unsigned char  flag_rx_ready;
+ 157:softuart.c    **** 
+ 158:softuart.c    **** // 1 Startbit, 8 Databits, 1 Stopbit = 10 Bits/Frame
+ 159:softuart.c    **** #define TX_NUM_OF_BITS (10)
+ 160:softuart.c    **** volatile static unsigned char  flag_tx_busy;
+ 161:softuart.c    **** volatile static unsigned char  timer_tx_ctr;
+ 162:softuart.c    **** volatile static unsigned char  bits_left_in_tx;
+ 163:softuart.c    **** volatile static unsigned short internal_tx_buffer; /* ! mt: was type uchar - this was wrong */
+ 164:softuart.c    **** 
+ 165:softuart.c    **** #define set_tx_pin_high()      ( SOFTUART_TXPORT |=  ( 1 << SOFTUART_TXBIT ) )
+ 166:softuart.c    **** #define set_tx_pin_low()       ( SOFTUART_TXPORT &= ~( 1 << SOFTUART_TXBIT ) )
+ 167:softuart.c    **** #define get_rx_pin_status()    ( SOFTUART_RXPIN  &   ( 1 << SOFTUART_RXBIT ) )
+ 168:softuart.c    **** 
+ 169:softuart.c    **** ISR(SOFTUART_T_COMP_LABEL)
+ 170:softuart.c    **** {
+  15               		.loc 1 170 0
+  16               		.cfi_startproc
+  17 0000 1F92      		push r1
+  18               	.LCFI0:
+  19               		.cfi_def_cfa_offset 3
+  20               		.cfi_offset 1, -2
+  21 0002 0F92      		push r0
+  22               	.LCFI1:
+  23               		.cfi_def_cfa_offset 4
+  24               		.cfi_offset 0, -3
+  25 0004 0FB6      		in r0,__SREG__
+  26 0006 0F92      		push r0
+  27 0008 1124      		clr __zero_reg__
+  28 000a 8F93      		push r24
+  29               	.LCFI2:
+  30               		.cfi_def_cfa_offset 5
+  31               		.cfi_offset 24, -4
+  32 000c 9F93      		push r25
+  33               	.LCFI3:
+  34               		.cfi_def_cfa_offset 6
+  35               		.cfi_offset 25, -5
+  36 000e EF93      		push r30
+  37               	.LCFI4:
+  38               		.cfi_def_cfa_offset 7
+  39               		.cfi_offset 30, -6
+  40 0010 FF93      		push r31
+  41               	.LCFI5:
+  42               		.cfi_def_cfa_offset 8
+  43               		.cfi_offset 31, -7
+  44               	/* prologue: Signal */
+  45               	/* frame size = 0 */
+  46               	/* stack size = 7 */
+  47               	.L__stack_usage = 7
+ 171:softuart.c    **** 	static unsigned char flag_rx_waiting_for_stop_bit = SU_FALSE;
+ 172:softuart.c    **** 	static unsigned char rx_mask;
+ 173:softuart.c    **** 	
+ 174:softuart.c    **** 	static unsigned char timer_rx_ctr;
+ 175:softuart.c    **** 	static unsigned char bits_left_in_rx;
+ 176:softuart.c    **** 	static unsigned char internal_rx_buffer;
+ 177:softuart.c    **** 	
+ 178:softuart.c    **** 	unsigned char start_bit, flag_in;
+ 179:softuart.c    **** 	unsigned char tmp;
+ 180:softuart.c    **** 	
+ 181:softuart.c    **** 	// Transmitter Section
+ 182:softuart.c    **** 	if ( flag_tx_busy == SU_TRUE ) {
+  48               		.loc 1 182 0
+  49 0012 8091 0000 		lds r24,flag_tx_busy
+  50 0016 8130      		cpi r24,lo8(1)
+  51 0018 01F4      		brne .+2
+  52 001a 00C0      		rjmp .L18
+  53               	.L2:
+ 183:softuart.c    **** 		tmp = timer_tx_ctr;
+ 184:softuart.c    **** 		if ( --tmp == 0 ) { // if ( --timer_tx_ctr <= 0 )
+ 185:softuart.c    **** 			if ( internal_tx_buffer & 0x01 ) {
+ 186:softuart.c    **** 				set_tx_pin_high();
+ 187:softuart.c    **** 			}
+ 188:softuart.c    **** 			else {
+ 189:softuart.c    **** 				set_tx_pin_low();
+ 190:softuart.c    **** 			}
+ 191:softuart.c    **** 			internal_tx_buffer >>= 1;
+ 192:softuart.c    **** 			tmp = 3; // timer_tx_ctr = 3;
+ 193:softuart.c    **** 			if ( --bits_left_in_tx == 0 ) {
+ 194:softuart.c    **** 				flag_tx_busy = SU_FALSE;
+ 195:softuart.c    **** 			}
+ 196:softuart.c    **** 		}
+ 197:softuart.c    **** 		timer_tx_ctr = tmp;
+ 198:softuart.c    **** 	}
+ 199:softuart.c    **** 
+ 200:softuart.c    **** 	// Receiver Section
+ 201:softuart.c    **** 	if ( flag_rx_off == SU_FALSE ) {
+  54               		.loc 1 201 0
+  55 001c 8091 0000 		lds r24,flag_rx_off
+  56 0020 8111      		cpse r24,__zero_reg__
+  57 0022 00C0      		rjmp .L1
+ 202:softuart.c    **** 		if ( flag_rx_waiting_for_stop_bit ) {
+  58               		.loc 1 202 0
+  59 0024 8091 0000 		lds r24,flag_rx_waiting_for_stop_bit.1795
+  60 0028 8823      		tst r24
+  61 002a 01F0      		breq .L8
+ 203:softuart.c    **** 			if ( --timer_rx_ctr == 0 ) {
+  62               		.loc 1 203 0
+  63 002c 8091 0000 		lds r24,timer_rx_ctr.1797
+  64 0030 8150      		subi r24,lo8(-(-1))
+  65 0032 8093 0000 		sts timer_rx_ctr.1797,r24
+  66 0036 8111      		cpse r24,__zero_reg__
+  67 0038 00C0      		rjmp .L1
+ 204:softuart.c    **** 				flag_rx_waiting_for_stop_bit = SU_FALSE;
+  68               		.loc 1 204 0
+  69 003a 1092 0000 		sts flag_rx_waiting_for_stop_bit.1795,__zero_reg__
+ 205:softuart.c    **** 				flag_rx_ready = SU_FALSE;
+  70               		.loc 1 205 0
+  71 003e 1092 0000 		sts flag_rx_ready,__zero_reg__
+ 206:softuart.c    **** 				inbuf[qin] = internal_rx_buffer;
+  72               		.loc 1 206 0
+  73 0042 E091 0000 		lds r30,qin
+  74 0046 F0E0      		ldi r31,0
+  75 0048 8091 0000 		lds r24,internal_rx_buffer.1799
+  76 004c E050      		subi r30,lo8(-(inbuf))
+  77 004e F040      		sbci r31,hi8(-(inbuf))
+  78 0050 8083      		st Z,r24
+ 207:softuart.c    **** 				if(internal_rx_buffer == '\n'){
+  79               		.loc 1 207 0
+  80 0052 8A30      		cpi r24,lo8(10)
+  81 0054 01F4      		brne .+2
+  82 0056 00C0      		rjmp .L19
+  83               	.L10:
+ 208:softuart.c    **** 					new_nmea_line = 1;
+ 209:softuart.c    **** 				}
+ 210:softuart.c    **** 				if ( ++qin >= SOFTUART_IN_BUF_SIZE ) {
+  84               		.loc 1 210 0
+  85 0058 8091 0000 		lds r24,qin
+  86 005c 8F5F      		subi r24,lo8(-(1))
+  87 005e 8093 0000 		sts qin,r24
+  88 0062 8F3F      		cpi r24,lo8(-1)
+  89 0064 01F4      		brne .L1
+ 211:softuart.c    **** 					// overflow - reset inbuf-index
+ 212:softuart.c    **** 					qin = 0;
+  90               		.loc 1 212 0
+  91 0066 1092 0000 		sts qin,__zero_reg__
+  92               	.L1:
+  93               	/* epilogue start */
+ 213:softuart.c    **** 				}
+ 214:softuart.c    **** 			}
+ 215:softuart.c    **** 		}
+ 216:softuart.c    **** 		else {  // rx_test_busy
+ 217:softuart.c    **** 			if ( flag_rx_ready == SU_FALSE ) {
+ 218:softuart.c    **** 				start_bit = get_rx_pin_status();
+ 219:softuart.c    **** 				// test for start bit
+ 220:softuart.c    **** 				if ( start_bit == 0 ) {
+ 221:softuart.c    **** 					flag_rx_ready      = SU_TRUE;
+ 222:softuart.c    **** 					internal_rx_buffer = 0;
+ 223:softuart.c    **** 					timer_rx_ctr       = 4;
+ 224:softuart.c    **** 					bits_left_in_rx    = RX_NUM_OF_BITS;
+ 225:softuart.c    **** 					rx_mask            = 1;
+ 226:softuart.c    **** 				}
+ 227:softuart.c    **** 			}
+ 228:softuart.c    **** 			else {  // rx_busy
+ 229:softuart.c    **** 				tmp = timer_rx_ctr;
+ 230:softuart.c    **** 				if ( --tmp == 0 ) { // if ( --timer_rx_ctr == 0 ) {
+ 231:softuart.c    **** 					// rcv
+ 232:softuart.c    **** 					tmp = 3;
+ 233:softuart.c    **** 					flag_in = get_rx_pin_status();
+ 234:softuart.c    **** 					if ( flag_in ) {
+ 235:softuart.c    **** 						internal_rx_buffer |= rx_mask;
+ 236:softuart.c    **** 					}
+ 237:softuart.c    **** 					rx_mask <<= 1;
+ 238:softuart.c    **** 					if ( --bits_left_in_rx == 0 ) {
+ 239:softuart.c    **** 						flag_rx_waiting_for_stop_bit = SU_TRUE;
+ 240:softuart.c    **** 					}
+ 241:softuart.c    **** 				}
+ 242:softuart.c    **** 				timer_rx_ctr = tmp;
+ 243:softuart.c    **** 			}
+ 244:softuart.c    **** 		}
+ 245:softuart.c    **** 	}
+ 246:softuart.c    **** }
+  94               		.loc 1 246 0
+  95 006a FF91      		pop r31
+  96 006c EF91      		pop r30
+  97 006e 9F91      		pop r25
+  98 0070 8F91      		pop r24
+  99 0072 0F90      		pop r0
+ 100 0074 0FBE      		out __SREG__,r0
+ 101 0076 0F90      		pop r0
+ 102 0078 1F90      		pop r1
+ 103 007a 1895      		reti
+ 104               	.L8:
+ 217:softuart.c    **** 				start_bit = get_rx_pin_status();
+ 105               		.loc 1 217 0
+ 106 007c 8091 0000 		lds r24,flag_rx_ready
+ 107 0080 8111      		cpse r24,__zero_reg__
+ 108 0082 00C0      		rjmp .L11
+ 220:softuart.c    **** 					flag_rx_ready      = SU_TRUE;
+ 109               		.loc 1 220 0
+ 110 0084 1B99      		sbic 0x3,3
+ 111 0086 00C0      		rjmp .L1
+ 221:softuart.c    **** 					internal_rx_buffer = 0;
+ 112               		.loc 1 221 0
+ 113 0088 81E0      		ldi r24,lo8(1)
+ 114 008a 8093 0000 		sts flag_rx_ready,r24
+ 222:softuart.c    **** 					timer_rx_ctr       = 4;
+ 115               		.loc 1 222 0
+ 116 008e 1092 0000 		sts internal_rx_buffer.1799,__zero_reg__
+ 223:softuart.c    **** 					bits_left_in_rx    = RX_NUM_OF_BITS;
+ 117               		.loc 1 223 0
+ 118 0092 94E0      		ldi r25,lo8(4)
+ 119 0094 9093 0000 		sts timer_rx_ctr.1797,r25
+ 224:softuart.c    **** 					rx_mask            = 1;
+ 120               		.loc 1 224 0
+ 121 0098 98E0      		ldi r25,lo8(8)
+ 122 009a 9093 0000 		sts bits_left_in_rx.1798,r25
+ 225:softuart.c    **** 				}
+ 123               		.loc 1 225 0
+ 124 009e 8093 0000 		sts rx_mask.1796,r24
+ 125 00a2 00C0      		rjmp .L1
+ 126               	.L18:
+ 183:softuart.c    **** 		if ( --tmp == 0 ) { // if ( --timer_tx_ctr <= 0 )
+ 127               		.loc 1 183 0
+ 128 00a4 8091 0000 		lds r24,timer_tx_ctr
+ 129               	.LVL0:
+ 184:softuart.c    **** 			if ( internal_tx_buffer & 0x01 ) {
+ 130               		.loc 1 184 0
+ 131 00a8 8150      		subi r24,lo8(-(-1))
+ 132               	.LVL1:
+ 133 00aa 01F4      		brne .L3
+ 185:softuart.c    **** 				set_tx_pin_high();
+ 134               		.loc 1 185 0
+ 135 00ac 8091 0000 		lds r24,internal_tx_buffer
+ 136 00b0 9091 0000 		lds r25,internal_tx_buffer+1
+ 137               	.LVL2:
+ 138 00b4 80FF      		sbrs r24,0
+ 139 00b6 00C0      		rjmp .L4
+ 186:softuart.c    **** 			}
+ 140               		.loc 1 186 0
+ 141 00b8 2A9A      		sbi 0x5,2
+ 142               	.L5:
+ 191:softuart.c    **** 			tmp = 3; // timer_tx_ctr = 3;
+ 143               		.loc 1 191 0
+ 144 00ba 8091 0000 		lds r24,internal_tx_buffer
+ 145 00be 9091 0000 		lds r25,internal_tx_buffer+1
+ 146 00c2 9695      		lsr r25
+ 147 00c4 8795      		ror r24
+ 148 00c6 9093 0000 		sts internal_tx_buffer+1,r25
+ 149 00ca 8093 0000 		sts internal_tx_buffer,r24
+ 150               	.LVL3:
+ 193:softuart.c    **** 				flag_tx_busy = SU_FALSE;
+ 151               		.loc 1 193 0
+ 152 00ce 8091 0000 		lds r24,bits_left_in_tx
+ 153 00d2 8150      		subi r24,lo8(-(-1))
+ 154 00d4 8093 0000 		sts bits_left_in_tx,r24
+ 155 00d8 8111      		cpse r24,__zero_reg__
+ 156 00da 00C0      		rjmp .L15
+ 194:softuart.c    **** 			}
+ 157               		.loc 1 194 0
+ 158 00dc 1092 0000 		sts flag_tx_busy,__zero_reg__
+ 192:softuart.c    **** 			if ( --bits_left_in_tx == 0 ) {
+ 159               		.loc 1 192 0
+ 160 00e0 83E0      		ldi r24,lo8(3)
+ 161               	.LVL4:
+ 162               	.L3:
+ 197:softuart.c    **** 	}
+ 163               		.loc 1 197 0
+ 164 00e2 8093 0000 		sts timer_tx_ctr,r24
+ 165 00e6 00C0      		rjmp .L2
+ 166               	.LVL5:
+ 167               	.L11:
+ 229:softuart.c    **** 				if ( --tmp == 0 ) { // if ( --timer_rx_ctr == 0 ) {
+ 168               		.loc 1 229 0
+ 169 00e8 8091 0000 		lds r24,timer_rx_ctr.1797
+ 170               	.LVL6:
+ 230:softuart.c    **** 					// rcv
+ 171               		.loc 1 230 0
+ 172 00ec 8150      		subi r24,lo8(-(-1))
+ 173               	.LVL7:
+ 174 00ee 01F4      		brne .L12
+ 175               	.LVL8:
+ 234:softuart.c    **** 						internal_rx_buffer |= rx_mask;
+ 176               		.loc 1 234 0
+ 177 00f0 1B99      		sbic 0x3,3
+ 178 00f2 00C0      		rjmp .L13
+ 179 00f4 8091 0000 		lds r24,rx_mask.1796
+ 180               	.L14:
+ 237:softuart.c    **** 					if ( --bits_left_in_rx == 0 ) {
+ 181               		.loc 1 237 0
+ 182 00f8 880F      		lsl r24
+ 183 00fa 8093 0000 		sts rx_mask.1796,r24
+ 238:softuart.c    **** 						flag_rx_waiting_for_stop_bit = SU_TRUE;
+ 184               		.loc 1 238 0
+ 185 00fe 8091 0000 		lds r24,bits_left_in_rx.1798
+ 186 0102 8150      		subi r24,lo8(-(-1))
+ 187 0104 8093 0000 		sts bits_left_in_rx.1798,r24
+ 188 0108 8111      		cpse r24,__zero_reg__
+ 189 010a 00C0      		rjmp .L16
+ 239:softuart.c    **** 					}
+ 190               		.loc 1 239 0
+ 191 010c 81E0      		ldi r24,lo8(1)
+ 192 010e 8093 0000 		sts flag_rx_waiting_for_stop_bit.1795,r24
+ 232:softuart.c    **** 					flag_in = get_rx_pin_status();
+ 193               		.loc 1 232 0
+ 194 0112 83E0      		ldi r24,lo8(3)
+ 195               	.LVL9:
+ 196               	.L12:
+ 242:softuart.c    **** 			}
+ 197               		.loc 1 242 0
+ 198 0114 8093 0000 		sts timer_rx_ctr.1797,r24
+ 199               		.loc 1 246 0
+ 200 0118 00C0      		rjmp .L1
+ 201               	.LVL10:
+ 202               	.L15:
+ 192:softuart.c    **** 			if ( --bits_left_in_tx == 0 ) {
+ 203               		.loc 1 192 0
+ 204 011a 83E0      		ldi r24,lo8(3)
+ 205 011c 00C0      		rjmp .L3
+ 206               	.LVL11:
+ 207               	.L4:
+ 189:softuart.c    **** 			}
+ 208               		.loc 1 189 0
+ 209 011e 2A98      		cbi 0x5,2
+ 210 0120 00C0      		rjmp .L5
+ 211               	.L19:
+ 208:softuart.c    **** 				}
+ 212               		.loc 1 208 0
+ 213 0122 81E0      		ldi r24,lo8(1)
+ 214 0124 8093 0000 		sts new_nmea_line,r24
+ 215 0128 00C0      		rjmp .L10
+ 216               	.LVL12:
+ 217               	.L13:
+ 235:softuart.c    **** 					}
+ 218               		.loc 1 235 0
+ 219 012a 8091 0000 		lds r24,rx_mask.1796
+ 220 012e 9091 0000 		lds r25,internal_rx_buffer.1799
+ 221 0132 982B      		or r25,r24
+ 222 0134 9093 0000 		sts internal_rx_buffer.1799,r25
+ 223 0138 00C0      		rjmp .L14
+ 224               	.L16:
+ 232:softuart.c    **** 					flag_in = get_rx_pin_status();
+ 225               		.loc 1 232 0
+ 226 013a 83E0      		ldi r24,lo8(3)
+ 227 013c 00C0      		rjmp .L12
+ 228               		.cfi_endproc
+ 229               	.LFE1:
+ 231               	.global	softuart_init
+ 233               	softuart_init:
+ 234               	.LFB4:
+ 247:softuart.c    **** 
+ 248:softuart.c    **** static void io_init(void)
+ 249:softuart.c    **** {
+ 250:softuart.c    **** 	// TX-Pin as output
+ 251:softuart.c    **** 	SOFTUART_TXDDR |=  ( 1 << SOFTUART_TXBIT );
+ 252:softuart.c    **** 	// RX-Pin as input
+ 253:softuart.c    **** 	SOFTUART_RXDDR &= ~( 1 << SOFTUART_RXBIT );
+ 254:softuart.c    **** }
+ 255:softuart.c    **** 
+ 256:softuart.c    **** static void timer_init(void)
+ 257:softuart.c    **** {
+ 258:softuart.c    **** 	unsigned char sreg_tmp;
+ 259:softuart.c    **** 	
+ 260:softuart.c    **** 	sreg_tmp = SREG;
+ 261:softuart.c    **** 	cli();
+ 262:softuart.c    **** 	
+ 263:softuart.c    **** 	SOFTUART_T_COMP_REG = SOFTUART_TIMERTOP;     /* set top */
+ 264:softuart.c    **** 
+ 265:softuart.c    **** 	SOFTUART_T_CONTR_REGA = SOFTUART_CTC_MASKA | SOFTUART_PRESC_MASKA;
+ 266:softuart.c    **** 	SOFTUART_T_CONTR_REGB = SOFTUART_CTC_MASKB | SOFTUART_PRESC_MASKB;
+ 267:softuart.c    **** 
+ 268:softuart.c    **** 	SOFTUART_T_INTCTL_REG |= SOFTUART_CMPINT_EN_MASK;
+ 269:softuart.c    **** 
+ 270:softuart.c    **** 	SOFTUART_T_CNT_REG = 0; /* reset counter */
+ 271:softuart.c    **** 	
+ 272:softuart.c    **** 	SREG = sreg_tmp;
+ 273:softuart.c    **** }
+ 274:softuart.c    **** 
+ 275:softuart.c    **** void softuart_init( void )
+ 276:softuart.c    **** {
+ 235               		.loc 1 276 0
+ 236               		.cfi_startproc
+ 237               	/* prologue: function */
+ 238               	/* frame size = 0 */
+ 239               	/* stack size = 0 */
+ 240               	.L__stack_usage = 0
+ 277:softuart.c    **** 	flag_tx_busy  = SU_FALSE;
+ 241               		.loc 1 277 0
+ 242 013e 1092 0000 		sts flag_tx_busy,__zero_reg__
+ 278:softuart.c    **** 	flag_rx_ready = SU_FALSE;
+ 243               		.loc 1 278 0
+ 244 0142 1092 0000 		sts flag_rx_ready,__zero_reg__
+ 279:softuart.c    **** 	flag_rx_off   = SU_FALSE;
+ 245               		.loc 1 279 0
+ 246 0146 1092 0000 		sts flag_rx_off,__zero_reg__
+ 280:softuart.c    **** 	
+ 281:softuart.c    **** 	set_tx_pin_high(); /* mt: set to high to avoid garbage on init */
+ 247               		.loc 1 281 0
+ 248 014a 2A9A      		sbi 0x5,2
+ 249               	.LBB11:
+ 250               	.LBB12:
+ 251:softuart.c    **** 	// RX-Pin as input
+ 251               		.loc 1 251 0
+ 252 014c 229A      		sbi 0x4,2
+ 253:softuart.c    **** }
+ 253               		.loc 1 253 0
+ 254 014e 2398      		cbi 0x4,3
+ 255               	.LBE12:
+ 256               	.LBE11:
+ 257               	.LBB13:
+ 258               	.LBB14:
+ 260:softuart.c    **** 	cli();
+ 259               		.loc 1 260 0
+ 260 0150 9FB7      		in r25,__SREG__
+ 261               	.LVL13:
+ 261:softuart.c    **** 	
+ 262               		.loc 1 261 0
+ 263               	/* #APP */
+ 264               	 ;  261 "softuart.c" 1
+ 265 0152 F894      		cli
+ 266               	 ;  0 "" 2
+ 263:softuart.c    **** 
+ 267               		.loc 1 263 0
+ 268               	/* #NOAPP */
+ 269 0154 81E2      		ldi r24,lo8(33)
+ 270 0156 87BD      		out 0x27,r24
+ 265:softuart.c    **** 	SOFTUART_T_CONTR_REGB = SOFTUART_CTC_MASKB | SOFTUART_PRESC_MASKB;
+ 271               		.loc 1 265 0
+ 272 0158 82E0      		ldi r24,lo8(2)
+ 273 015a 84BD      		out 0x24,r24
+ 266:softuart.c    **** 
+ 274               		.loc 1 266 0
+ 275 015c 85BD      		out 0x25,r24
+ 268:softuart.c    **** 
+ 276               		.loc 1 268 0
+ 277 015e EEE6      		ldi r30,lo8(110)
+ 278 0160 F0E0      		ldi r31,0
+ 279 0162 8081      		ld r24,Z
+ 280 0164 8260      		ori r24,lo8(2)
+ 281 0166 8083      		st Z,r24
+ 270:softuart.c    **** 	
+ 282               		.loc 1 270 0
+ 283 0168 16BC      		out 0x26,__zero_reg__
+ 272:softuart.c    **** }
+ 284               		.loc 1 272 0
+ 285 016a 9FBF      		out __SREG__,r25
+ 286               	.LVL14:
+ 287 016c 0895      		ret
+ 288               	.LBE14:
+ 289               	.LBE13:
+ 290               		.cfi_endproc
+ 291               	.LFE4:
+ 293               	.global	softuart_turn_rx_on
+ 295               	softuart_turn_rx_on:
+ 296               	.LFB6:
+ 282:softuart.c    **** 
+ 283:softuart.c    **** 	io_init();
+ 284:softuart.c    **** 	timer_init();
+ 285:softuart.c    **** }
+ 286:softuart.c    **** 
+ 287:softuart.c    **** static void idle(void)
+ 288:softuart.c    **** {
+ 289:softuart.c    **** 	// timeout handling goes here 
+ 290:softuart.c    **** 	// - but there is a "softuart_kbhit" in this code...
+ 291:softuart.c    **** 	// add watchdog-reset here if needed
+ 292:softuart.c    **** }
+ 293:softuart.c    **** 
+ 294:softuart.c    **** void softuart_turn_rx_on( void )
+ 295:softuart.c    **** {
+ 297               		.loc 1 295 0
+ 298               		.cfi_startproc
+ 299               	/* prologue: function */
+ 300               	/* frame size = 0 */
+ 301               	/* stack size = 0 */
+ 302               	.L__stack_usage = 0
+ 296:softuart.c    **** 	flag_rx_off = SU_FALSE;
+ 303               		.loc 1 296 0
+ 304 016e 1092 0000 		sts flag_rx_off,__zero_reg__
+ 305 0172 0895      		ret
+ 306               		.cfi_endproc
+ 307               	.LFE6:
+ 309               	.global	softuart_turn_rx_off
+ 311               	softuart_turn_rx_off:
+ 312               	.LFB7:
+ 297:softuart.c    **** }
+ 298:softuart.c    **** 
+ 299:softuart.c    **** void softuart_turn_rx_off( void )
+ 300:softuart.c    **** {
+ 313               		.loc 1 300 0
+ 314               		.cfi_startproc
+ 315               	/* prologue: function */
+ 316               	/* frame size = 0 */
+ 317               	/* stack size = 0 */
+ 318               	.L__stack_usage = 0
+ 301:softuart.c    **** 	flag_rx_off = SU_TRUE;
+ 319               		.loc 1 301 0
+ 320 0174 81E0      		ldi r24,lo8(1)
+ 321 0176 8093 0000 		sts flag_rx_off,r24
+ 322 017a 0895      		ret
+ 323               		.cfi_endproc
+ 324               	.LFE7:
+ 326               	.global	softuart_getchar
+ 328               	softuart_getchar:
+ 329               	.LFB8:
+ 302:softuart.c    **** }
+ 303:softuart.c    **** 
+ 304:softuart.c    **** char softuart_getchar( void )
+ 305:softuart.c    **** {
+ 330               		.loc 1 305 0
+ 331               		.cfi_startproc
+ 332               	/* prologue: function */
+ 333               	/* frame size = 0 */
+ 334               	/* stack size = 0 */
+ 335               	.L__stack_usage = 0
+ 306:softuart.c    **** 	char ch;
+ 307:softuart.c    **** 	(void)idle;
+ 308:softuart.c    **** 
+ 309:softuart.c    **** 	//while ( qout == qin ) {
+ 310:softuart.c    **** 	//	idle();
+ 311:softuart.c    **** 	//}
+ 312:softuart.c    **** 	ch = inbuf[qout];
+ 336               		.loc 1 312 0
+ 337 017c E091 0000 		lds r30,qout
+ 338 0180 F0E0      		ldi r31,0
+ 339 0182 E050      		subi r30,lo8(-(inbuf))
+ 340 0184 F040      		sbci r31,hi8(-(inbuf))
+ 341 0186 8081      		ld r24,Z
+ 342               	.LVL15:
+ 313:softuart.c    **** 	if ( ++qout >= SOFTUART_IN_BUF_SIZE ) {
+ 343               		.loc 1 313 0
+ 344 0188 9091 0000 		lds r25,qout
+ 345 018c 9F5F      		subi r25,lo8(-(1))
+ 346 018e 9093 0000 		sts qout,r25
+ 347 0192 9F3F      		cpi r25,lo8(-1)
+ 348 0194 01F0      		breq .L25
+ 314:softuart.c    **** 		qout = 0;
+ 315:softuart.c    **** 	}
+ 316:softuart.c    **** 	
+ 317:softuart.c    **** 	return( ch );
+ 318:softuart.c    **** }
+ 349               		.loc 1 318 0
+ 350 0196 0895      		ret
+ 351               	.L25:
+ 314:softuart.c    **** 		qout = 0;
+ 352               		.loc 1 314 0
+ 353 0198 1092 0000 		sts qout,__zero_reg__
+ 354               		.loc 1 318 0
+ 355 019c 0895      		ret
+ 356               		.cfi_endproc
+ 357               	.LFE8:
+ 359               	.global	softuart_kbhit
+ 361               	softuart_kbhit:
+ 362               	.LFB9:
+ 319:softuart.c    **** 
+ 320:softuart.c    **** unsigned char softuart_kbhit( void )
+ 321:softuart.c    **** {
+ 363               		.loc 1 321 0
+ 364               		.cfi_startproc
+ 365               	/* prologue: function */
+ 366               	/* frame size = 0 */
+ 367               	/* stack size = 0 */
+ 368               	.L__stack_usage = 0
+ 322:softuart.c    **** 	return( qin != qout );
+ 369               		.loc 1 322 0
+ 370 019e 2091 0000 		lds r18,qin
+ 371 01a2 9091 0000 		lds r25,qout
+ 372 01a6 81E0      		ldi r24,lo8(1)
+ 373 01a8 2913      		cpse r18,r25
+ 323:softuart.c    **** }
+ 374               		.loc 1 323 0
+ 375 01aa 0895      		ret
+ 376               	.L28:
+ 322:softuart.c    **** 	return( qin != qout );
+ 377               		.loc 1 322 0
+ 378 01ac 80E0      		ldi r24,0
+ 379               		.loc 1 323 0
+ 380 01ae 0895      		ret
+ 381               		.cfi_endproc
+ 382               	.LFE9:
+ 384               	.global	softuart_flush_input_buffer
+ 386               	softuart_flush_input_buffer:
+ 387               	.LFB10:
+ 324:softuart.c    **** 
+ 325:softuart.c    **** void softuart_flush_input_buffer( void )
+ 326:softuart.c    **** {
+ 388               		.loc 1 326 0
+ 389               		.cfi_startproc
+ 390               	/* prologue: function */
+ 391               	/* frame size = 0 */
+ 392               	/* stack size = 0 */
+ 393               	.L__stack_usage = 0
+ 327:softuart.c    **** 	qin  = 0;
+ 394               		.loc 1 327 0
+ 395 01b0 1092 0000 		sts qin,__zero_reg__
+ 328:softuart.c    **** 	qout = 0;
+ 396               		.loc 1 328 0
+ 397 01b4 1092 0000 		sts qout,__zero_reg__
+ 398 01b8 0895      		ret
+ 399               		.cfi_endproc
+ 400               	.LFE10:
+ 402               	.global	softuart_transmit_busy
+ 404               	softuart_transmit_busy:
+ 405               	.LFB11:
+ 329:softuart.c    **** }
+ 330:softuart.c    **** 	
+ 331:softuart.c    **** unsigned char softuart_transmit_busy( void ) 
+ 332:softuart.c    **** {
+ 406               		.loc 1 332 0
+ 407               		.cfi_startproc
+ 408               	/* prologue: function */
+ 409               	/* frame size = 0 */
+ 410               	/* stack size = 0 */
+ 411               	.L__stack_usage = 0
+ 333:softuart.c    **** 	return ( flag_tx_busy == SU_TRUE ) ? 1 : 0;
+ 412               		.loc 1 333 0
+ 413 01ba 9091 0000 		lds r25,flag_tx_busy
+ 414 01be 81E0      		ldi r24,lo8(1)
+ 415 01c0 9130      		cpi r25,lo8(1)
+ 416 01c2 01F0      		breq .L31
+ 417 01c4 80E0      		ldi r24,0
+ 418               	.L31:
+ 334:softuart.c    **** }
+ 419               		.loc 1 334 0
+ 420 01c6 0895      		ret
+ 421               		.cfi_endproc
+ 422               	.LFE11:
+ 424               	.global	softuart_putchar
+ 426               	softuart_putchar:
+ 427               	.LFB12:
+ 335:softuart.c    **** 
+ 336:softuart.c    **** void softuart_putchar( const char ch )
+ 337:softuart.c    **** {
+ 428               		.loc 1 337 0
+ 429               		.cfi_startproc
+ 430               	/* prologue: function */
+ 431               	/* frame size = 0 */
+ 432               	/* stack size = 0 */
+ 433               	.L__stack_usage = 0
+ 434               	.LVL16:
+ 435               	.L36:
+ 338:softuart.c    **** 	while ( flag_tx_busy == SU_TRUE ) {
+ 436               		.loc 1 338 0 discriminator 1
+ 437 01c8 9091 0000 		lds r25,flag_tx_busy
+ 438 01cc 9130      		cpi r25,lo8(1)
+ 439 01ce 01F0      		breq .L36
+ 339:softuart.c    **** 		; // wait for transmitter ready
+ 340:softuart.c    **** 		  // add watchdog-reset here if needed;
+ 341:softuart.c    **** 	}
+ 342:softuart.c    **** 
+ 343:softuart.c    **** 	// invoke_UART_transmit
+ 344:softuart.c    **** 	timer_tx_ctr       = 3;
+ 440               		.loc 1 344 0
+ 441 01d0 93E0      		ldi r25,lo8(3)
+ 442 01d2 9093 0000 		sts timer_tx_ctr,r25
+ 345:softuart.c    **** 	bits_left_in_tx    = TX_NUM_OF_BITS;
+ 443               		.loc 1 345 0
+ 444 01d6 9AE0      		ldi r25,lo8(10)
+ 445 01d8 9093 0000 		sts bits_left_in_tx,r25
+ 346:softuart.c    **** 	internal_tx_buffer = ( ch << 1 ) | 0x200;
+ 446               		.loc 1 346 0
+ 447 01dc 90E0      		ldi r25,0
+ 448 01de 880F      		lsl r24
+ 449 01e0 991F      		rol r25
+ 450               	.LVL17:
+ 451 01e2 9260      		ori r25,2
+ 452 01e4 9093 0000 		sts internal_tx_buffer+1,r25
+ 453 01e8 8093 0000 		sts internal_tx_buffer,r24
+ 347:softuart.c    **** 	flag_tx_busy       = SU_TRUE;
+ 454               		.loc 1 347 0
+ 455 01ec 81E0      		ldi r24,lo8(1)
+ 456 01ee 8093 0000 		sts flag_tx_busy,r24
+ 457 01f2 0895      		ret
+ 458               		.cfi_endproc
+ 459               	.LFE12:
+ 461               	.global	softuart_puts
+ 463               	softuart_puts:
+ 464               	.LFB13:
+ 348:softuart.c    **** }
+ 349:softuart.c    **** 	
+ 350:softuart.c    **** void softuart_puts( const char *s )
+ 351:softuart.c    **** {
+ 465               		.loc 1 351 0
+ 466               		.cfi_startproc
+ 467               	.LVL18:
+ 468               	/* prologue: function */
+ 469               	/* frame size = 0 */
+ 470               	/* stack size = 0 */
+ 471               	.L__stack_usage = 0
+ 352:softuart.c    **** 	while ( *s ) {
+ 472               		.loc 1 352 0
+ 473 01f4 FC01      		movw r30,r24
+ 474 01f6 2081      		ld r18,Z
+ 475 01f8 2223      		tst r18
+ 476 01fa 01F0      		breq .L39
+ 477 01fc 3196      		adiw r30,1
+ 478               	.LBB15:
+ 479               	.LBB16:
+ 344:softuart.c    **** 	bits_left_in_tx    = TX_NUM_OF_BITS;
+ 480               		.loc 1 344 0
+ 481 01fe 53E0      		ldi r21,lo8(3)
+ 345:softuart.c    **** 	internal_tx_buffer = ( ch << 1 ) | 0x200;
+ 482               		.loc 1 345 0
+ 483 0200 4AE0      		ldi r20,lo8(10)
+ 347:softuart.c    **** }
+ 484               		.loc 1 347 0
+ 485 0202 81E0      		ldi r24,lo8(1)
+ 486               	.LVL19:
+ 487               	.L41:
+ 338:softuart.c    **** 		; // wait for transmitter ready
+ 488               		.loc 1 338 0
+ 489 0204 9091 0000 		lds r25,flag_tx_busy
+ 490 0208 9130      		cpi r25,lo8(1)
+ 491 020a 01F0      		breq .L41
+ 344:softuart.c    **** 	bits_left_in_tx    = TX_NUM_OF_BITS;
+ 492               		.loc 1 344 0
+ 493 020c 5093 0000 		sts timer_tx_ctr,r21
+ 345:softuart.c    **** 	internal_tx_buffer = ( ch << 1 ) | 0x200;
+ 494               		.loc 1 345 0
+ 495 0210 4093 0000 		sts bits_left_in_tx,r20
+ 346:softuart.c    **** 	flag_tx_busy       = SU_TRUE;
+ 496               		.loc 1 346 0
+ 497 0214 30E0      		ldi r19,0
+ 498 0216 220F      		lsl r18
+ 499 0218 331F      		rol r19
+ 500 021a 3260      		ori r19,2
+ 501 021c 3093 0000 		sts internal_tx_buffer+1,r19
+ 502 0220 2093 0000 		sts internal_tx_buffer,r18
+ 347:softuart.c    **** }
+ 503               		.loc 1 347 0
+ 504 0224 8093 0000 		sts flag_tx_busy,r24
+ 505               	.LBE16:
+ 506               	.LBE15:
+ 507               		.loc 1 352 0
+ 508 0228 2191      		ld r18,Z+
+ 509 022a 2111      		cpse r18,__zero_reg__
+ 510 022c 00C0      		rjmp .L41
+ 511               	.L39:
+ 512 022e 0895      		ret
+ 513               		.cfi_endproc
+ 514               	.LFE13:
+ 516               	.global	softuart_puts_p
+ 518               	softuart_puts_p:
+ 519               	.LFB14:
+ 353:softuart.c    **** 		softuart_putchar( *s++ );
+ 354:softuart.c    **** 	}
+ 355:softuart.c    **** }
+ 356:softuart.c    **** 	
+ 357:softuart.c    **** void softuart_puts_p( const char *prg_s )
+ 358:softuart.c    **** {
+ 520               		.loc 1 358 0
+ 521               		.cfi_startproc
+ 522               	.LVL20:
+ 523               	/* prologue: function */
+ 524               	/* frame size = 0 */
+ 525               	/* stack size = 0 */
+ 526               	.L__stack_usage = 0
+ 527               	.LBB17:
+ 359:softuart.c    **** 	char c;
+ 360:softuart.c    **** 
+ 361:softuart.c    **** 	while ( ( c = pgm_read_byte( prg_s++ ) ) ) {
+ 528               		.loc 1 361 0
+ 529 0230 9C01      		movw r18,r24
+ 530 0232 2F5F      		subi r18,-1
+ 531 0234 3F4F      		sbci r19,-1
+ 532               	.LVL21:
+ 533 0236 FC01      		movw r30,r24
+ 534               	/* #APP */
+ 535               	 ;  361 "softuart.c" 1
+ 536 0238 9491      		lpm r25, Z
+ 537               		
+ 538               	 ;  0 "" 2
+ 539               	.LVL22:
+ 540               	/* #NOAPP */
+ 541               	.LBE17:
+ 542 023a 9923      		tst r25
+ 543 023c 01F0      		breq .L47
+ 544 023e F901      		movw r30,r18
+ 545               	.LBB18:
+ 546               	.LBB19:
+ 344:softuart.c    **** 	bits_left_in_tx    = TX_NUM_OF_BITS;
+ 547               		.loc 1 344 0
+ 548 0240 43E0      		ldi r20,lo8(3)
+ 345:softuart.c    **** 	internal_tx_buffer = ( ch << 1 ) | 0x200;
+ 549               		.loc 1 345 0
+ 550 0242 3AE0      		ldi r19,lo8(10)
+ 347:softuart.c    **** }
+ 551               		.loc 1 347 0
+ 552 0244 21E0      		ldi r18,lo8(1)
+ 553               	.LVL23:
+ 554               	.L49:
+ 338:softuart.c    **** 		; // wait for transmitter ready
+ 555               		.loc 1 338 0
+ 556 0246 8091 0000 		lds r24,flag_tx_busy
+ 557 024a 8130      		cpi r24,lo8(1)
+ 558 024c 01F0      		breq .L49
+ 344:softuart.c    **** 	bits_left_in_tx    = TX_NUM_OF_BITS;
+ 559               		.loc 1 344 0
+ 560 024e 4093 0000 		sts timer_tx_ctr,r20
+ 345:softuart.c    **** 	internal_tx_buffer = ( ch << 1 ) | 0x200;
+ 561               		.loc 1 345 0
+ 562 0252 3093 0000 		sts bits_left_in_tx,r19
+ 346:softuart.c    **** 	flag_tx_busy       = SU_TRUE;
+ 563               		.loc 1 346 0
+ 564 0256 892F      		mov r24,r25
+ 565 0258 90E0      		ldi r25,0
+ 566               	.LVL24:
+ 567 025a 880F      		lsl r24
+ 568 025c 991F      		rol r25
+ 569               	.LVL25:
+ 570 025e 9260      		ori r25,2
+ 571 0260 9093 0000 		sts internal_tx_buffer+1,r25
+ 572 0264 8093 0000 		sts internal_tx_buffer,r24
+ 347:softuart.c    **** }
+ 573               		.loc 1 347 0
+ 574 0268 2093 0000 		sts flag_tx_busy,r18
+ 575               	.LVL26:
+ 576               	.LBE19:
+ 577               	.LBE18:
+ 578               	.LBB20:
+ 579               		.loc 1 361 0
+ 580               	/* #APP */
+ 581               	 ;  361 "softuart.c" 1
+ 582 026c 9491      		lpm r25, Z
+ 583               		
+ 584               	 ;  0 "" 2
+ 585               	.LVL27:
+ 586               	/* #NOAPP */
+ 587 026e 3196      		adiw r30,1
+ 588               	.LVL28:
+ 589               	.LBE20:
+ 590 0270 9111      		cpse r25,__zero_reg__
+ 591 0272 00C0      		rjmp .L49
+ 592               	.LVL29:
+ 593               	.L47:
+ 594 0274 0895      		ret
+ 595               		.cfi_endproc
+ 596               	.LFE14:
+ 598               		.local	rx_mask.1796
+ 599               		.comm	rx_mask.1796,1,1
+ 600               		.local	bits_left_in_rx.1798
+ 601               		.comm	bits_left_in_rx.1798,1,1
+ 602               		.local	internal_rx_buffer.1799
+ 603               		.comm	internal_rx_buffer.1799,1,1
+ 604               		.local	timer_rx_ctr.1797
+ 605               		.comm	timer_rx_ctr.1797,1,1
+ 606               		.local	flag_rx_waiting_for_stop_bit.1795
+ 607               		.comm	flag_rx_waiting_for_stop_bit.1795,1,1
+ 608               		.local	internal_tx_buffer
+ 609               		.comm	internal_tx_buffer,2,1
+ 610               		.local	bits_left_in_tx
+ 611               		.comm	bits_left_in_tx,1,1
+ 612               		.local	timer_tx_ctr
+ 613               		.comm	timer_tx_ctr,1,1
+ 614               		.local	flag_tx_busy
+ 615               		.comm	flag_tx_busy,1,1
+ 616               		.local	flag_rx_ready
+ 617               		.comm	flag_rx_ready,1,1
+ 618               		.local	flag_rx_off
+ 619               		.comm	flag_rx_off,1,1
+ 620               		.comm	qout,1,1
+ 621               		.comm	qin,1,1
+ 622               		.local	inbuf
+ 623               		.comm	inbuf,255,1
+ 624               		.comm	new_nmea_line,1,1
+ 625               	.Letext0:
+ 626               		.file 2 "/usr/lib/avr/include/stdint.h"
+ 627               		.file 3 "softuart.h"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 softuart.c
+     /tmp/ccjygB80.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccjygB80.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccjygB80.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccjygB80.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccjygB80.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccjygB80.s:12     .text:0000000000000000 __vector_14
+     /tmp/ccjygB80.s:613    .bss:0000000000000009 flag_tx_busy
+     /tmp/ccjygB80.s:617    .bss:000000000000000b flag_rx_off
+     /tmp/ccjygB80.s:605    .bss:0000000000000004 flag_rx_waiting_for_stop_bit.1795
+     /tmp/ccjygB80.s:603    .bss:0000000000000003 timer_rx_ctr.1797
+     /tmp/ccjygB80.s:615    .bss:000000000000000a flag_rx_ready
+                            *COM*:0000000000000001 qin
+     /tmp/ccjygB80.s:601    .bss:0000000000000002 internal_rx_buffer.1799
+     /tmp/ccjygB80.s:619    .bss:000000000000000c inbuf
+     /tmp/ccjygB80.s:599    .bss:0000000000000001 bits_left_in_rx.1798
+                             .bss:0000000000000000 rx_mask.1796
+     /tmp/ccjygB80.s:611    .bss:0000000000000008 timer_tx_ctr
+     /tmp/ccjygB80.s:607    .bss:0000000000000005 internal_tx_buffer
+     /tmp/ccjygB80.s:609    .bss:0000000000000007 bits_left_in_tx
+                            *COM*:0000000000000001 new_nmea_line
+     /tmp/ccjygB80.s:233    .text:000000000000013e softuart_init
+     /tmp/ccjygB80.s:295    .text:000000000000016e softuart_turn_rx_on
+     /tmp/ccjygB80.s:311    .text:0000000000000174 softuart_turn_rx_off
+     /tmp/ccjygB80.s:328    .text:000000000000017c softuart_getchar
+                            *COM*:0000000000000001 qout
+     /tmp/ccjygB80.s:361    .text:000000000000019e softuart_kbhit
+     /tmp/ccjygB80.s:386    .text:00000000000001b0 softuart_flush_input_buffer
+     /tmp/ccjygB80.s:404    .text:00000000000001ba softuart_transmit_busy
+     /tmp/ccjygB80.s:426    .text:00000000000001c8 softuart_putchar
+     /tmp/ccjygB80.s:463    .text:00000000000001f4 softuart_puts
+     /tmp/ccjygB80.s:518    .text:0000000000000230 softuart_puts_p
+
+UNDEFINED SYMBOLS
+__do_clear_bss

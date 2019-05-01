@@ -89,7 +89,7 @@
     #warning "Check SOFTUART_TIMERTOP: increase prescaler, lower F_CPU or use a 16 bit timer"
 #endif
 
-#define SOFTUART_IN_BUF_SIZE     32
+#define SOFTUART_IN_BUF_SIZE     255
 
 // Init the Software Uart
 void softuart_init(void);
@@ -121,6 +121,8 @@ void softuart_puts( const char *s );
 // Write a NULL-terminated string from program-space (flash) 
 // to the serial port. example: softuart_puts_p(PSTR("test"))
 void softuart_puts_p( const char *prg_s );
+
+volatile unsigned char new_nmea_line;
 
 // Helper-Macro - "automatically" inserts PSTR
 // when used: include avr/pgmspace.h before this include-file

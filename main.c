@@ -241,7 +241,7 @@ int main(void)
     _Accum const high_offset = 1100.f;
 
 
-    long int const prs_count_max = 2;
+    long int const prs_count_max = 2; // Period = 256/8Mhz, to 50Hz/20ms => 20ms/
     int prs_count = 0;
 
 
@@ -256,37 +256,30 @@ int main(void)
     kalman_init(alt);
     char c = ' ';
 
-    //uint16_t count_dt = 0;
 
     for (;;) {
         while((TIFR1 & (1<<TOV1))!=(1<<TOV1)){// Wait until flag set
-        //count_dt = TCNT1L;
-        //count_dt |= TCNT1H<<8;
-        //while(count_dt < 8192){
-
-            while( softuart_kbhit() ) {
-                c = softuart_getchar();
-                putchar(c);
-            }
 
 
-            /*
-            if(flag_volume_recv){
-                // SNPRINTF to get volume
-                flag_volume_recv = 0;
+		if(new_nmea_line){
+			while(softuart_kbhit()) {
+				c = softuart_getchar();
+				putchar(c);
+				if(c == '\n'){
+					new_nmea_line = 0;
+					break;
+				}
+			}
+		}
 
-            }*/
-               /*
-            count_dt = TCNT1L;
-            count_dt |= TCNT1H<<8;*/
+
         }
-        //dt = count_dt* (1/1E6);
         TIFR1 |= (1 << TOV1);
 
-        if(++prs_count>=prs_count_max && c=='\n'){ // Ensure NMEA end of line
+        if(++prs_count>=prs_count_max ){
             prs_count = 0;
             uint32_t inttp = (uint32_t)press;// Global var set by AltitudeBMP
-            printf("PRS %05lx\r\n",(unsigned long int)inttp);
+	    printf("PRS %05lx\r\n",(unsigned long int)inttp);
         }
 
         time += dt;
@@ -295,15 +288,8 @@ int main(void)
         if(alt>0.f && alt<20000.f){
             kalman_predict(0.01f);
         }
-        // Check error values on measurement
-        //if(alt>0.f && alt<20000.f){
         kalman_update(alt);
-        //}
-        //rate = 0.7*rate + 0.3*X[1];
         rate = X[1];
-        //printf("%f,%f,%f,%f\r\n",(double)time, (double)X[0],(double)alt,(double) rate);
-        //printf("B:%u - A:%u\r\n",(unsigned int)b_int,(unsigned int)a_int); 
-
 
         if(tone_done==1){
             if(rate < low_level){
@@ -355,7 +341,7 @@ void toggle_PC3(void){
 // every time data is used (use it as a dt value)
 //
 ISR(TIMER2_COMPA_vect){
-	millis++;
+    millis++;
     if(state == 0){// Noisy half period
         toggle_PC3();
         //if(!mute) PORTC |= (1<<PORTC3);
