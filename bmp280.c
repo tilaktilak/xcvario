@@ -25,8 +25,8 @@ int InitBMP280(){
     i2c_readReg(BMP_ADDR,REG_ID,&data,1);
     if(data != 0x58) return 1;
 
-    //uint8_t reset = 0xB6;
-    //i2c_writeReg(BMP_ADDR,REG_RESET,&reset,1);
+    uint8_t reset = 0xB6;
+    i2c_writeReg(BMP_ADDR,REG_RESET,&reset,1);
 
     // OSRS_T = x2      / 010
     // OSRS_P = x16     / 101
@@ -34,18 +34,15 @@ int InitBMP280(){
     uint8_t ctrl_meas = 0b01010111;
     retval += i2c_writeReg(BMP_ADDR,REG_CTRL_MEAS,&ctrl_meas,1);
 
-    // WARNING ! Will write on reserved bit
-    // tstdy =  0.5     /000
-    // IRR = 4         /000
+    // tstdy =  1ms     /000
+    // IRR = 0         /000
     // SPI ENABLE       /0
-    //uint8_t config = 0b01001000;
-    //uint8_t config = 0x00;
-    //retval += i2c_writeReg(BMP_ADDR,REG_CONFIG,&config,1);
+    uint8_t config = 0b00000000;
+
+    retval += i2c_writeReg(BMP_ADDR,REG_CONFIG,&config,1);
 
     uint8_t address = REG_CALIB_firstLSB;
     // Get Calibration Data
-
-
     retval += i2c_readReg(BMP_ADDR,address,b.buff,24);
    
 /*
@@ -112,7 +109,6 @@ float TemperatureBMP280(void){
   float T  = (t_fine * 5 + 128) >> 8;
   return T/100;
 }
-float test1;
 
 float PressureBMP280(void) {
   int64_t var1, var2, p;
@@ -140,7 +136,6 @@ float PressureBMP280(void) {
   var2 = (((int64_t)b.dig_P8) * p) >> 19;
 
   p = ((p + var1 + var2) >> 8) + (((int64_t)b.dig_P7)<<4);
-  test1 = (float)p/256;
   return (float)p/256;
 }
 

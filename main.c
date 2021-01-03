@@ -279,7 +279,7 @@ int main(void)
         if(++prs_count>=prs_count_max ){
             prs_count = 0;
             uint32_t inttp = (uint32_t)press;// Global var set by AltitudeBMP
-	    printf("PRS %05lx\r\n",(unsigned long int)inttp);
+            printf("PRS %05lx\r\n",(unsigned long int)inttp);
         }
 
         time += dt;
